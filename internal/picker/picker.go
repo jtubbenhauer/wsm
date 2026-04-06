@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	ansiReset  = "\033[0m"
-	ansiDim    = "\033[2m"
-	ansiGreen  = "\033[32m"
-	ansiYellow = "\033[33m"
-	ansiRed    = "\033[31m"
+	ansiReset     = "\033[0m"
+	ansiDim       = "\033[2m"
+	ansiDimBright = "\033[38;5;245m" // gray, lighter than dim
+	ansiGreen     = "\033[32m"
+	ansiYellow    = "\033[33m"
+	ansiRed       = "\033[31m"
 )
 
 var workspaceColors = []string{
@@ -50,6 +51,7 @@ type PickerItem struct {
 }
 
 func FormatPickerLine(item PickerItem, width int) string {
+	width -= 4 // account for fzf pointer and chrome
 	if width < 40 {
 		width = 40
 	}
@@ -66,7 +68,7 @@ func FormatPickerLine(item PickerItem, width int) string {
 		if padding < 2 {
 			padding = 2
 		}
-		return ansiDim + "  " + ageField + "  " + title +
+		return ansiDimBright + "  " + ageField + "  " + title +
 			strings.Repeat(" ", padding) + wsColor + wsName + ansiReset
 	}
 
@@ -182,7 +184,7 @@ func RunFzf(items []PickerItem) (*PickerResult, error) {
 		"--header=  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-c: cancel",
 		"--prompt=  ",
 		"--pointer=▸",
-		"--color=fg:-1,fg+:white:bold,bg:-1,bg+:-1,hl:yellow,hl+:yellow:bold,info:grey,prompt:blue,pointer:blue,header:dark",
+		"--color=fg:-1,fg+:white:bold,bg:-1,bg+:-1,hl:yellow,hl+:yellow:bold,info:grey,prompt:blue,pointer:blue,header:gray",
 		"--preview-window=hidden",
 		"--bind=ctrl-d:execute-silent(echo delete:{2})+abort",
 		"--expect=ctrl-n",
@@ -265,7 +267,7 @@ func RunWorkspacePicker(workspaces []db.Workspace) (*db.Workspace, error) {
 		"--header=  Select workspace for new session",
 		"--prompt=  ",
 		"--pointer=▸",
-		"--color=fg:-1,fg+:white:bold,bg:-1,bg+:-1,hl:yellow,hl+:yellow:bold,info:grey,prompt:blue,pointer:blue,header:dark",
+		"--color=fg:-1,fg+:white:bold,bg:-1,bg+:-1,hl:yellow,hl+:yellow:bold,info:grey,prompt:blue,pointer:blue,header:gray",
 		"--preview-window=hidden",
 	)
 	cmd.Stdin = strings.NewReader(input)
