@@ -22,6 +22,8 @@ const (
 	ansiGreen     = "\033[32m"
 	ansiYellow    = "\033[33m"
 	ansiRed       = "\033[31m"
+
+	AllWorkspacesName = "__all__"
 )
 
 var workspaceColors = []string{
@@ -155,12 +157,13 @@ func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, st
 }
 
 type PickerResult struct {
-	Item          *PickerItem
-	NewRequest    bool
-	DeleteRequest bool
+	Item            *PickerItem
+	NewRequest      bool
+	DeleteRequest   bool
+	WorkspaceFilter bool
 }
 
-func RunFzf(items []PickerItem) (*PickerResult, error) {
+func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 	width := getTerminalWidth()
 
 	var lines []string
@@ -175,6 +178,12 @@ func RunFzf(items []PickerItem) (*PickerResult, error) {
 
 	input := strings.Join(lines, "\n")
 
+	header := "  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-w: filter workspace  ·  ctrl-c: cancel"
+	if activeFilter != "" {
+		wsColor := colorForWorkspace(activeFilter)
+		header = "  " + wsColor + "[" + activeFilter + "]" + ansiReset + "  ctrl-n: new  ·  ctrl-d: delete  ·  ctrl-w: change filter  ·  ctrl-c: cancel"
+	}
+
 	cmd := exec.Command("fzf",
 		"--ansi",
 		"--no-multi",
@@ -182,12 +191,12 @@ func RunFzf(items []PickerItem) (*PickerResult, error) {
 		"--with-nth=1",
 		"--layout=reverse",
 		"--no-separator",
-		"--header=  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-c: cancel",
+		"--header="+header,
 		"--prompt=  ",
 		"--pointer=▸",
 		"--color=fg:-1,fg+:white:bold,bg:-1,bg+:-1,hl:yellow,hl+:yellow:bold,info:grey,prompt:blue,pointer:blue,header:gray",
 		"--preview-window=hidden",
-		"--expect=ctrl-n,ctrl-d",
+		"--expect=ctrl-n,ctrl-d,ctrl-w",
 	)
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Stderr = os.Stderr
@@ -208,6 +217,10 @@ func RunFzf(items []PickerItem) (*PickerResult, error) {
 
 	if key == "ctrl-n" {
 		return &PickerResult{NewRequest: true}, nil
+	}
+
+	if key == "ctrl-w" {
+		return &PickerResult{WorkspaceFilter: true}, nil
 	}
 
 	if len(outputLines) < 2 || outputLines[1] == "" {
@@ -252,10 +265,24 @@ func RunFzf(items []PickerItem) (*PickerResult, error) {
 	return nil, fmt.Errorf("session %q not found in items", meta)
 }
 
-func RunWorkspacePicker(workspaces []db.Workspace) (*db.Workspace, error) {
+func FilterItemsByWorkspace(items []PickerItem, workspaceName string) []PickerItem {
+	var filtered []PickerItem
+	for _, item := range items {
+		if item.WorkspaceName == workspaceName {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func RunWorkspacePicker(workspaces []db.Workspace, includeAll bool) (*db.Workspace, error) {
 	width := getTerminalWidth()
 
 	var lines []string
+	if includeAll {
+		label := ansiDimBright + "All workspaces" + ansiReset
+		lines = append(lines, label+"\t"+AllWorkspacesName)
+	}
 	for _, ws := range workspaces {
 		wsColor := colorForWorkspace(ws.Name)
 		name := wsColor + ws.Name + ansiReset
@@ -270,6 +297,11 @@ func RunWorkspacePicker(workspaces []db.Workspace) (*db.Workspace, error) {
 
 	input := strings.Join(lines, "\n")
 
+	wsHeader := "  Select workspace for new session"
+	if includeAll {
+		wsHeader = "  Filter by workspace"
+	}
+
 	cmd := exec.Command("fzf",
 		"--ansi",
 		"--no-multi",
@@ -277,7 +309,7 @@ func RunWorkspacePicker(workspaces []db.Workspace) (*db.Workspace, error) {
 		"--with-nth=1",
 		"--layout=reverse",
 		"--no-separator",
-		"--header=  Select workspace for new session",
+		"--header="+wsHeader,
 		"--prompt=  ",
 		"--pointer=▸",
 		"--color=fg:-1,fg+:white:bold,bg:-1,bg+:-1,hl:yellow,hl+:yellow:bold,info:grey,prompt:blue,pointer:blue,header:gray",
@@ -307,6 +339,9 @@ func RunWorkspacePicker(workspaces []db.Workspace) (*db.Workspace, error) {
 		return nil, fmt.Errorf("unexpected fzf output format")
 	}
 	path := parts[1]
+	if path == AllWorkspacesName {
+		return &db.Workspace{Name: AllWorkspacesName}, nil
+	}
 	for i := range workspaces {
 		if workspaces[i].Path == path {
 			return &workspaces[i], nil

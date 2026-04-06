@@ -54,6 +54,8 @@ func runPicker() error {
 		dirs[i] = ws.Path
 	}
 
+	var filterWorkspace *db.Workspace
+
 	for {
 		sessionsByDir, err := client.FetchSessionsForDirs(dirs)
 		if err != nil {
@@ -64,12 +66,35 @@ func runPicker() error {
 
 		items := picker.BuildPickerItems(workspaces, sessionsByDir, statuses)
 
-		result, err := picker.RunFzf(items)
+		activeFilter := ""
+		displayItems := items
+		if filterWorkspace != nil {
+			activeFilter = filterWorkspace.Name
+			displayItems = picker.FilterItemsByWorkspace(items, filterWorkspace.Name)
+		}
+
+		result, err := picker.RunFzf(displayItems, activeFilter)
 		if err != nil {
 			return fmt.Errorf("running picker: %w", err)
 		}
 		if result == nil {
 			return nil // user cancelled
+		}
+
+		if result.WorkspaceFilter {
+			ws, err := picker.RunWorkspacePicker(workspaces, true)
+			if err != nil {
+				return fmt.Errorf("running workspace filter picker: %w", err)
+			}
+			if ws == nil {
+				continue // user cancelled sub-picker, re-show main picker
+			}
+			if ws.Name == picker.AllWorkspacesName {
+				filterWorkspace = nil
+			} else {
+				filterWorkspace = ws
+			}
+			continue
 		}
 
 		if result.DeleteRequest {
@@ -84,7 +109,7 @@ func runPicker() error {
 
 		if result.NewRequest {
 			// Ctrl-N pressed: show workspace sub-picker
-			ws, err := picker.RunWorkspacePicker(workspaces)
+			ws, err := picker.RunWorkspacePicker(workspaces, false)
 			if err != nil {
 				return fmt.Errorf("running workspace picker: %w", err)
 			}
