@@ -1,0 +1,23 @@
+internal/picker/picker.go
+  6372c4624488d58b 30-39,55,62-63,68-69,75,94,133-139,142,152,155-156,169-170,288-289,327-333
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "e42f4216ae67f97d00eb33d046705c7ea9babb12",
+  "prompts": {
+    "6372c4624488d58b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29ede0920ffeVz2qy5pSy4jbA2",
+        "model": "github-copilot/claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer",
+      "messages": [],
+      "total_additions": 64,
+      "total_deletions": 83,
+      "accepted_lines": 39,
+      "overriden_lines": 0
+    }
+  }
+}
