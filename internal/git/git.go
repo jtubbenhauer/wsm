@@ -9,8 +9,17 @@ import (
 )
 
 func IsGitRepo(path string) bool {
-	cmd := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
-	return cmd.Run() == nil
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	toplevel := strings.TrimSpace(string(out))
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	return filepath.Clean(toplevel) == filepath.Clean(absPath)
 }
 
 func CurrentBranch(path string) (string, error) {
@@ -58,33 +67,55 @@ type ScanResult struct {
 	Branch     string
 }
 
+var skipDirs = map[string]bool{
+	"node_modules": true, "vendor": true, "dist": true,
+	"build": true, ".next": true, "__pycache__": true,
+	".venv": true, "target": true,
+}
+
 func ScanForRepos(rootDir string) ([]ScanResult, error) {
-	entries, err := os.ReadDir(rootDir)
+	return scanRepos(rootDir, "", 0, 2)
+}
+
+func scanRepos(dir, prefix string, depth, maxDepth int) ([]ScanResult, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("reading directory %s: %w", rootDir, err)
+		return nil, fmt.Errorf("reading directory %s: %w", dir, err)
 	}
 
 	var results []ScanResult
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || skipDirs[entry.Name()] {
 			continue
 		}
-		fullPath := filepath.Join(rootDir, entry.Name())
+		fullPath := filepath.Join(dir, entry.Name())
+
+		name := entry.Name()
+		if prefix != "" {
+			name = prefix + "/" + entry.Name()
+		}
+
+		if strings.HasSuffix(entry.Name(), "-worktrees") {
+			nested, err := scanWorktreeDir(fullPath)
+			if err != nil {
+				continue
+			}
+			results = append(results, nested...)
+			continue
+		}
 
 		if IsGitRepo(fullPath) {
-			result := ScanResult{Name: entry.Name(), Path: fullPath}
+			result := ScanResult{Name: name, Path: fullPath}
 			if IsWorktree(fullPath) {
 				result.IsWorktree = true
 				result.ParentPath, _ = WorktreeParentPath(fullPath)
 				result.Branch, _ = CurrentBranch(fullPath)
 			}
 			results = append(results, result)
-			continue
 		}
 
-		// Recurse into *-worktrees/ directories
-		if strings.HasSuffix(entry.Name(), "-worktrees") {
-			nested, err := scanWorktreeDir(fullPath)
+		if depth+1 < maxDepth {
+			nested, err := scanRepos(fullPath, name, depth+1, maxDepth)
 			if err != nil {
 				continue
 			}

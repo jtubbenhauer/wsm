@@ -81,7 +81,24 @@ var scanCmd = &cobra.Command{
 			fmt.Printf("  + %s (%s) [%s]\n", repo.Name, repo.Path, label)
 		}
 
-		fmt.Printf("\nScanned %s: %d added, %d skipped\n", absDir, added, skipped)
+		// Remove workspaces whose paths no longer point to a valid git repo
+		existing, err := store.ListWorkspaces()
+		if err != nil {
+			return fmt.Errorf("listing workspaces for cleanup: %w", err)
+		}
+		var removed int
+		for _, ws := range existing {
+			if !git.IsGitRepo(ws.Path) {
+				if err := store.RemoveWorkspace(ws.Name); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: failed to remove %s: %v\n", ws.Name, err)
+					continue
+				}
+				removed++
+				fmt.Printf("  - %s (%s)\n", ws.Name, ws.Path)
+			}
+		}
+
+		fmt.Printf("\nScanned %s: %d added, %d removed, %d unchanged\n", absDir, added, removed, skipped)
 		return nil
 	},
 }
