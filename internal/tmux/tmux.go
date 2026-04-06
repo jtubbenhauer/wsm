@@ -160,6 +160,24 @@ func openCodeAttachCommand(sessionID, directory string) string {
 	return fmt.Sprintf("wsm attach -s %s --dir %s", sessionID, directory)
 }
 
+func RunInTerminal(args ...string) error {
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func DisplayPopup(workingDir string, args ...string) error {
+	cmdArgs := []string{"display-popup", "-E", "-w", "80%", "-h", "80%", "-d", workingDir}
+	cmdArgs = append(cmdArgs, args...)
+	cmd := exec.Command("tmux", cmdArgs...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 func SwitchOrAttach(name string) error {
 	sanitised := SanitiseName(name)
 	if IsInsideTmux() {

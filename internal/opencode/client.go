@@ -308,10 +308,10 @@ func EnsureServer(host string, port int) (*Client, error) {
 
 	// Wait for server to become ready
 	for i := 0; i < 30; i++ {
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		if client.IsServerRunning() {
 			return client, nil
 		}
 	}
-	return nil, fmt.Errorf("opencode server did not start within 15s")
+	return nil, fmt.Errorf("opencode server did not start within 3s")
 }

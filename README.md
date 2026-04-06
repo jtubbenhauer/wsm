@@ -59,6 +59,7 @@ wsm
 | `wsm list` | List all registered workspaces (alias: `ls`, supports `--json`) |
 | `wsm info <name>` | Show workspace details and its opencode sessions |
 | `wsm worktree <parent> <branch>` | Create a git worktree and register it as a workspace |
+| `wsm plan [--dir] [--name]` | Open plan files from `.opencode/plans/` in nvim |
 
 ## Picker Controls
 
@@ -67,6 +68,7 @@ wsm
 | `Enter` | Switch to the selected session |
 | `ctrl-n` | Create a new session (opens a workspace sub-picker) |
 | `ctrl-d` | Delete the selected session |
+| `ctrl-o` | Open plan files for the selected workspace in nvim |
 
 ### Status indicators
 
@@ -86,6 +88,20 @@ wsm worktree my-project feature-branch --symlinks node_modules,.env
 ```
 
 Use `--base` to specify the ref to branch from (defaults to `HEAD`).
+
+## Plan Viewer
+
+wsm can open plan files from a workspace's `.opencode/plans/` directory in nvim via a tmux floating popup.
+
+**From the picker:** Press `ctrl-o` on any session to open its workspace's plan files. If multiple plan files exist, a secondary picker lets you choose.
+
+**From a tmux session:** Run `wsm plan` from within a workspace directory. Add a tmux binding for quick access:
+
+```tmux
+bind-key o run-shell "tmux popup -E -w 80% -h 80% wsm plan"
+```
+
+Smart detection tries to match the workspace name against plan filenames (e.g., workspace `wsm` matches `wsm-plan.md`), falling back to the most recently modified file.
 
 ## Configuration
 

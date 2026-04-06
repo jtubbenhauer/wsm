@@ -3,10 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/jacksteamdev/wsm/internal/db"
 	"github.com/jacksteamdev/wsm/internal/opencode"
 	"github.com/jacksteamdev/wsm/internal/picker"
+	"github.com/jacksteamdev/wsm/internal/plans"
 	"github.com/jacksteamdev/wsm/internal/tmux"
 	"github.com/spf13/cobra"
 )
@@ -55,16 +57,16 @@ func runPicker() error {
 	}
 
 	var filterWorkspace *db.Workspace
+	var items []picker.PickerItem
 
 	for {
-		sessionsByDir, err := client.FetchSessionsForDirs(dirs)
-		if err != nil {
-			return fmt.Errorf("fetching sessions: %w", err)
+		if items == nil {
+			sessionsByDir, statuses, err := fetchAll(client, dirs)
+			if err != nil {
+				return fmt.Errorf("fetching sessions: %w", err)
+			}
+			items = picker.BuildPickerItems(workspaces, sessionsByDir, statuses)
 		}
-
-		statuses := client.FetchStatusesForDirs(dirs)
-
-		items := picker.BuildPickerItems(workspaces, sessionsByDir, statuses)
 
 		activeFilter := ""
 		displayItems := items
@@ -94,8 +96,19 @@ func runPicker() error {
 			} else {
 				filterWorkspace = ws
 			}
+			// reuse cached items — no re-fetch needed
 			continue
 		}
+
+		if result.PlanRequest {
+			if err := openPlanForWorkspace(result.Item.WorkspacePath, result.Item.WorkspaceName); err != nil {
+				fmt.Fprintf(os.Stderr, "plan viewer: %v\n", err)
+			}
+			continue
+		}
+
+		// any action other than filter change invalidates the cache
+		items = nil
 
 		if result.DeleteRequest {
 			if err := client.DeleteSession(result.Item.SessionID); err != nil {
@@ -153,4 +166,57 @@ func runPicker() error {
 
 		return tmux.SwitchOrAttach(selected.WorkspaceName)
 	}
+}
+
+func fetchAll(client *opencode.Client, dirs []string) (picker.SessionsByDir, map[string]opencode.SessionStatus, error) {
+	var sessionsByDir picker.SessionsByDir
+	var statuses map[string]opencode.SessionStatus
+	var sessErr error
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		sessionsByDir, sessErr = client.FetchSessionsForDirs(dirs)
+	}()
+	go func() {
+		defer wg.Done()
+		statuses = client.FetchStatusesForDirs(dirs)
+	}()
+
+	wg.Wait()
+
+	if sessErr != nil {
+		return nil, nil, fmt.Errorf("fetching sessions: %w", sessErr)
+	}
+	return sessionsByDir, statuses, nil
+}
+
+func openPlanForWorkspace(workspacePath, workspaceName string) error {
+	files, err := plans.Discover(workspacePath)
+	if err != nil {
+		return fmt.Errorf("discovering plan files: %w", err)
+	}
+	if len(files) == 0 {
+		fmt.Println("No plan files found in .opencode/plans/")
+		return nil
+	}
+
+	var target *plans.PlanFile
+	if len(files) == 1 {
+		target = &files[0]
+	} else {
+		best := plans.PickBest(files, workspaceName)
+		selected, err := picker.RunPlanPicker(files, best)
+		if err != nil {
+			return fmt.Errorf("running plan picker: %w", err)
+		}
+		if selected == nil {
+			return nil
+		}
+		target = selected
+	}
+
+	return tmux.RunInTerminal("nvim", target.Path)
 }

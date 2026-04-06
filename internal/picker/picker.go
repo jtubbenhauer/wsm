@@ -13,6 +13,7 @@ import (
 
 	"github.com/jacksteamdev/wsm/internal/db"
 	"github.com/jacksteamdev/wsm/internal/opencode"
+	"github.com/jacksteamdev/wsm/internal/plans"
 )
 
 const (
@@ -125,6 +126,7 @@ type PickerResult struct {
 	NewRequest      bool
 	DeleteRequest   bool
 	WorkspaceFilter bool
+	PlanRequest     bool
 }
 
 func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
@@ -149,11 +151,11 @@ func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 
 	input := strings.Join(lines, "\n")
 
-	header := "  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-w: filter workspace  ·  ctrl-c: cancel\n "
+	header := "  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-w: filter workspace  ·  ctrl-o: view plan  ·  ctrl-c: cancel\n "
 	if activeFilter != "" {
 		wsColour := colourForWorkspace(activeFilter)
 		filterDisplay := shortName(activeFilter)
-		header = "  " + wsColour + "[" + filterDisplay + "]" + ansiReset + "  ctrl-n: new  ·  ctrl-d: delete  ·  ctrl-w: change filter  ·  ctrl-c: cancel\n "
+		header = "  " + wsColour + "[" + filterDisplay + "]" + ansiReset + "  ctrl-n: new  ·  ctrl-d: delete  ·  ctrl-w: change filter  ·  ctrl-o: plan  ·  ctrl-c: cancel\n "
 	}
 
 	cmd := exec.Command("fzf",
@@ -169,7 +171,7 @@ func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 		"--info=hidden",
 		"--color=fg:#e6edf3,fg+:#f0f6fc:bold,bg:#0d1117,bg+:#161b22,hl:#3fb950,hl+:#3fb950:bold,info:#8b949e,prompt:#58a6ff,pointer:#58a6ff,header:#8b949e,gutter:#0d1117,border:#30363d",
 		"--preview-window=hidden",
-		"--expect=ctrl-n,ctrl-d,ctrl-w",
+		"--expect=ctrl-n,ctrl-d,ctrl-w,ctrl-o",
 	)
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Stderr = os.Stderr
@@ -194,6 +196,27 @@ func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 
 	if key == "ctrl-w" {
 		return &PickerResult{WorkspaceFilter: true}, nil
+	}
+
+	if key == "ctrl-o" {
+		if len(outputLines) < 2 || outputLines[1] == "" {
+			return nil, nil
+		}
+		selected := outputLines[1]
+		parts := strings.SplitN(selected, "\t", 2)
+		if len(parts) < 2 {
+			return nil, nil
+		}
+		meta := parts[1]
+		if strings.HasPrefix(meta, "new:") {
+			return nil, nil // no workspace path for "new" rows without a session
+		}
+		for i := range items {
+			if items[i].SessionID == meta {
+				return &PickerResult{PlanRequest: true, Item: &items[i]}, nil
+			}
+		}
+		return nil, nil
 	}
 
 	if len(outputLines) < 2 || outputLines[1] == "" {
@@ -392,4 +415,72 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func RunPlanPicker(files []plans.PlanFile, preselected *plans.PlanFile) (*plans.PlanFile, error) {
+	var lines []string
+	defaultIndex := 0
+	for i, f := range files {
+		age := colouredAge(f.ModTime)
+		name := strings.TrimSuffix(f.Name, ".md")
+		displayed := "  " + age + "  " + name
+		lines = append(lines, displayed+"\t"+f.Path)
+		if preselected != nil && f.Path == preselected.Path {
+			defaultIndex = i
+		}
+	}
+
+	input := strings.Join(lines, "\n")
+
+	args := []string{
+		"--ansi",
+		"--no-multi",
+		"--delimiter=\t",
+		"--with-nth=1",
+		"--layout=reverse",
+		"--no-separator",
+		"--header=  Select plan file",
+		"--prompt=  ",
+		"--pointer=▸",
+		"--info=hidden",
+		"--color=fg:#e6edf3,fg+:#f0f6fc:bold,bg:#0d1117,bg+:#161b22,hl:#3fb950,hl+:#3fb950:bold,info:#8b949e,prompt:#58a6ff,pointer:#58a6ff,header:#8b949e,gutter:#0d1117,border:#30363d",
+		"--preview-window=hidden",
+	}
+
+	if defaultIndex > 0 {
+		// fzf --layout=reverse shows items top-down, so scroll to the match
+		args = append(args, fmt.Sprintf("--scroll-off=0"))
+	}
+
+	cmd := exec.Command("fzf", args...)
+	cmd.Stdin = strings.NewReader(input)
+	cmd.Stderr = os.Stderr
+
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code := exitErr.ExitCode()
+			if code == 1 || code == 130 {
+				return nil, nil
+			}
+		}
+		return nil, fmt.Errorf("running plan picker: %w", err)
+	}
+
+	selected := strings.TrimSpace(string(out))
+	if selected == "" {
+		return nil, nil
+	}
+
+	parts := strings.SplitN(selected, "\t", 2)
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("unexpected fzf output format")
+	}
+	path := parts[1]
+	for i := range files {
+		if files[i].Path == path {
+			return &files[i], nil
+		}
+	}
+	return nil, fmt.Errorf("plan file with path %q not found", path)
 }
