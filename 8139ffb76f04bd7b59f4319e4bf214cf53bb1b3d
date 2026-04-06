@@ -1,0 +1,25 @@
+internal/git/git.go
+  8a22b41a8469e772 12-22,70-75,77-81,83,88-103,108,117-118
+cmd/scan.go
+  8a22b41a8469e772 84-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "8139ffb76f04bd7b59f4319e4bf214cf53bb1b3d",
+  "prompts": {
+    "8a22b41a8469e772": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29b856b21ffewd2w3o8pWOcU8l",
+        "model": "github-copilot/claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer",
+      "messages": [],
+      "total_additions": 60,
+      "total_deletions": 12,
+      "accepted_lines": 60,
+      "overriden_lines": 0
+    }
+  }
+}
