@@ -1,6 +1,6 @@
 # wsm
 
-Workspace Session Manager — a tmux-based picker for managing [opencode](https://opencode.ai/) sessions across multiple workspaces.
+Workspace Session Manager. A tmux-based picker for managing [opencode](https://opencode.ai/) sessions across multiple workspaces.
 
 wsm registers git repositories as workspaces, then provides a fuzzy picker (via fzf) to create and switch between opencode sessions. Selecting a session opens a tmux session with three windows: nvim, opencode + a shell pane, and lazygit.
 
@@ -8,9 +8,9 @@ wsm registers git repositories as workspaces, then provides a fuzzy picker (via 
 
 | Tool | Purpose |
 |---|---|
-| [tmux](https://github.com/tmux/tmux) | Terminal multiplexer — manages sessions, windows, and panes |
-| [opencode](https://opencode.ai/) | AI coding assistant — wsm manages its sessions |
-| [fzf](https://github.com/junegunn/fzf) | Fuzzy finder — powers the interactive picker |
+| [tmux](https://github.com/tmux/tmux) | Terminal multiplexer |
+| [opencode](https://opencode.ai/) | AI coding assistant |
+| [fzf](https://github.com/junegunn/fzf) | Fuzzy finder for the interactive picker |
 | [git](https://git-scm.com/) | Repository detection and worktree management |
 | [nvim](https://neovim.io/) | Editor, launched in tmux window 1 |
 | [lazygit](https://github.com/jesseduffield/lazygit) | Git TUI, launched in tmux window 3 |
@@ -34,7 +34,7 @@ Add to your `~/.tmux.conf`:
 bind-key w run-shell "tmux popup -E -w 80% -h 80% wsm"
 ```
 
-This opens the picker in a centered tmux popup with `prefix + w`.
+This opens the picker in a centred tmux popup with `prefix + w`.
 
 ## Quick Start
 
@@ -42,7 +42,7 @@ This opens the picker in a centered tmux popup with `prefix + w`.
 # 1. Discover git repos under ~/dev (default) and register them as workspaces
 wsm scan
 
-# 2. Open the picker — shows all opencode sessions across all workspaces
+# 2. Open the picker, shows all opencode sessions across all workspaces
 wsm
 
 # 3. Select a session to switch to it, or create a new one
@@ -70,8 +70,8 @@ wsm
 
 ### Status indicators
 
-- **Yellow dot** — session is busy (opencode is actively working)
-- **Red arrow** — session needs a retry
+- Yellow dot: session is busy (opencode is actively working)
+- Red arrow: session needs a retry
 
 Sessions are sorted by most recently focused.
 

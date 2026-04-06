@@ -26,7 +26,7 @@ const (
 	AllWorkspacesName = "__all__"
 )
 
-var workspaceColors = []string{
+var workspaceColours = []string{
 	"\033[38;5;114m",         // green
 	"\033[38;5;180m",         // gold
 	"\033[38;5;139m",         // mauve
@@ -58,12 +58,12 @@ func FormatPickerLine(item PickerItem, width int, maxWsWidth int) string {
 		width = 40
 	}
 
-	wsColor := colorForWorkspace(item.WorkspaceName)
+	wsColour := colourForWorkspace(item.WorkspaceName)
 	wsName := shortName(item.WorkspaceName)
-	paddedWs := wsColor + wsName + strings.Repeat(" ", maxWsWidth-len(wsName)) + ansiReset
+	paddedWs := wsColour + wsName + strings.Repeat(" ", maxWsWidth-len(wsName)) + ansiReset
 
 	indicator := statusIndicator(item.Status)
-	age := coloredAge(item.UpdatedAt)
+	age := colouredAge(item.UpdatedAt)
 
 	// maxWsWidth + 2(gap) + 2(indicator) + 4(age) + 2(gap)
 	maxTitle := width - maxWsWidth - 10
@@ -151,9 +151,9 @@ func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 
 	header := "  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-w: filter workspace  ·  ctrl-c: cancel\n "
 	if activeFilter != "" {
-		wsColor := colorForWorkspace(activeFilter)
+		wsColour := colourForWorkspace(activeFilter)
 		filterDisplay := shortName(activeFilter)
-		header = "  " + wsColor + "[" + filterDisplay + "]" + ansiReset + "  ctrl-n: new  ·  ctrl-d: delete  ·  ctrl-w: change filter  ·  ctrl-c: cancel\n "
+		header = "  " + wsColour + "[" + filterDisplay + "]" + ansiReset + "  ctrl-n: new  ·  ctrl-d: delete  ·  ctrl-w: change filter  ·  ctrl-c: cancel\n "
 	}
 
 	cmd := exec.Command("fzf",
@@ -257,8 +257,8 @@ func RunWorkspacePicker(workspaces []db.Workspace, includeAll bool) (*db.Workspa
 		lines = append(lines, label+"\t"+AllWorkspacesName)
 	}
 	for _, ws := range workspaces {
-		wsColor := colorForWorkspace(ws.Name)
-		name := wsColor + ws.Name + ansiReset
+		wsColour := colourForWorkspace(ws.Name)
+		name := wsColour + ws.Name + ansiReset
 		padding := width - len(ws.Name) - 2
 		if padding < 2 {
 			padding = 2
@@ -331,10 +331,10 @@ func shortName(name string) string {
 	return name
 }
 
-func colorForWorkspace(name string) string {
+func colourForWorkspace(name string) string {
 	h := fnv.New32a()
 	h.Write([]byte(name))
-	return workspaceColors[int(h.Sum32())%len(workspaceColors)]
+	return workspaceColours[int(h.Sum32())%len(workspaceColours)]
 }
 
 func statusIndicator(status string) string {
@@ -348,28 +348,28 @@ func statusIndicator(status string) string {
 	}
 }
 
-func coloredAge(t time.Time) string {
+func colouredAge(t time.Time) string {
 	if t.IsZero() {
 		return "    "
 	}
 	d := time.Since(t)
-	var text, color string
+	var text, colour string
 	switch {
 	case d < time.Minute:
 		text = "now"
-		color = ansiGreen
+		colour = ansiGreen
 	case d < time.Hour:
 		text = fmt.Sprintf("%dm", int(d.Minutes()))
-		color = ansiYellow
+		colour = ansiYellow
 	case d < 24*time.Hour:
 		text = fmt.Sprintf("%dh", int(d.Hours()))
 	default:
 		text = fmt.Sprintf("%dd", int(d.Hours()/24))
-		color = ansiDim
+		colour = ansiDim
 	}
 	padded := fmt.Sprintf("%4s", text)
-	if color != "" {
-		return color + padded + ansiReset
+	if colour != "" {
+		return colour + padded + ansiReset
 	}
 	return padded
 }

@@ -127,7 +127,7 @@ func scanWorktreeDir(dir string) ([]ScanResult, error) {
 	return results, nil
 }
 
-func SanitizeBranchName(branch string) string {
+func SanitiseBranchName(branch string) string {
 	replacer := strings.NewReplacer("/", "-", " ", "-", ":", "-")
 	return replacer.Replace(branch)
 }
@@ -135,8 +135,8 @@ func SanitizeBranchName(branch string) string {
 func WorktreePath(parentPath, branch string) string {
 	parentDir := filepath.Dir(parentPath)
 	parentName := filepath.Base(parentPath)
-	sanitized := SanitizeBranchName(branch)
-	return filepath.Join(parentDir, parentName+"-worktrees", sanitized)
+	sanitised := SanitiseBranchName(branch)
+	return filepath.Join(parentDir, parentName+"-worktrees", sanitised)
 }
 
 func CreateWorktree(parentPath, branch, baseRef string) (string, error) {

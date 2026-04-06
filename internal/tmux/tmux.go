@@ -47,7 +47,7 @@ func IsInsideTmux() bool {
 	return os.Getenv("TMUX") != ""
 }
 
-func SanitizeName(name string) string {
+func SanitiseName(name string) string {
 	replacer := strings.NewReplacer(".", "_", ":", "_", " ", "_", "/", "_")
 	return replacer.Replace(name)
 }
@@ -84,7 +84,7 @@ type SessionLayout struct {
 //	Window 2: opencode attach (left) | empty shell (right)
 //	Window 3: lazygit
 func CreateWorkspaceSession(layout SessionLayout) error {
-	name := SanitizeName(layout.Name)
+	name := SanitiseName(layout.Name)
 
 	if HasSession(name) {
 		return switchToOpenCodeSession(name, layout)
@@ -161,9 +161,9 @@ func openCodeAttachCommand(sessionID, directory string) string {
 }
 
 func SwitchOrAttach(name string) error {
-	sanitized := SanitizeName(name)
+	sanitised := SanitiseName(name)
 	if IsInsideTmux() {
-		return SwitchClient(sanitized)
+		return SwitchClient(sanitised)
 	}
-	return AttachSession(sanitized)
+	return AttachSession(sanitised)
 }

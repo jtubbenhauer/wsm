@@ -52,7 +52,7 @@ var worktreeCmd = &cobra.Command{
 			fmt.Printf("warning: some symlinks failed: %v\n", err)
 		}
 
-		wtName := fmt.Sprintf("%s/%s", parentName, git.SanitizeBranchName(branch))
+		wtName := fmt.Sprintf("%s/%s", parentName, git.SanitiseBranchName(branch))
 		ws, err := store.AddWorkspace(wtName, wtPath, db.WorkspaceTypeWorktree, parent.Path, branch, symlinks)
 		if err != nil {
 			return err
