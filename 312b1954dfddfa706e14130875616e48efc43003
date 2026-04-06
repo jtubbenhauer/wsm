@@ -1,0 +1,31 @@
+internal/git/git.go
+  6372c4624488d58b 130,138-139
+internal/picker/picker.go
+  6372c4624488d58b 29,61,63,66,154,156,260-261,334,337,351,356,360,363,368,371-372
+internal/tmux/tmux.go
+  6372c4624488d58b 50,87,164,166,168
+README.md
+  6372c4624488d58b 3,11-13,37,45,73-74
+cmd/worktree.go
+  6372c4624488d58b 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "312b1954dfddfa706e14130875616e48efc43003",
+  "prompts": {
+    "6372c4624488d58b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29ede0920ffeVz2qy5pSy4jbA2",
+        "model": "github-copilot/claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer",
+      "messages": [],
+      "total_additions": 39,
+      "total_deletions": 39,
+      "accepted_lines": 34,
+      "overriden_lines": 0
+    }
+  }
+}
