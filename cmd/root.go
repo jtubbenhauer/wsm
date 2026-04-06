@@ -54,68 +54,78 @@ func runPicker() error {
 		dirs[i] = ws.Path
 	}
 
-	sessionsByDir, err := client.FetchSessionsForDirs(dirs)
-	if err != nil {
-		return fmt.Errorf("fetching sessions: %w", err)
-	}
-
-	statuses := client.FetchStatusesForDirs(dirs)
-
-	items := picker.BuildPickerItems(workspaces, sessionsByDir, statuses)
-
-	result, err := picker.RunFzf(items)
-	if err != nil {
-		return fmt.Errorf("running picker: %w", err)
-	}
-	if result == nil {
-		return nil // user cancelled
-	}
-
-	var selected *picker.PickerItem
-
-	if result.NewRequest {
-		// Ctrl-N pressed: show workspace sub-picker
-		ws, err := picker.RunWorkspacePicker(workspaces)
+	for {
+		sessionsByDir, err := client.FetchSessionsForDirs(dirs)
 		if err != nil {
-			return fmt.Errorf("running workspace picker: %w", err)
+			return fmt.Errorf("fetching sessions: %w", err)
 		}
-		if ws == nil {
-			return nil
-		}
-		selected = &picker.PickerItem{
-			WorkspaceName: ws.Name,
-			WorkspacePath: ws.Path,
-			IsNew:         true,
-		}
-	} else {
-		selected = result.Item
-	}
 
-	sessionID := selected.SessionID
-	if selected.IsNew {
-		session, err := client.CreateSession(selected.WorkspacePath)
+		statuses := client.FetchStatusesForDirs(dirs)
+
+		items := picker.BuildPickerItems(workspaces, sessionsByDir, statuses)
+
+		result, err := picker.RunFzf(items)
 		if err != nil {
-			return fmt.Errorf("creating session: %w", err)
+			return fmt.Errorf("running picker: %w", err)
 		}
-		sessionID = session.ID
-		fmt.Printf("Created new session for %s\n", selected.WorkspaceName)
-	}
+		if result == nil {
+			return nil // user cancelled
+		}
 
-	// Track activity
-	ws, err := store.GetWorkspace(selected.WorkspaceName)
-	if err == nil && ws != nil {
-		store.UpsertSessionActivity(ws.ID, sessionID, selected.SessionTitle)
-	}
+		if result.DeleteRequest {
+			if err := client.DeleteSession(result.Item.SessionID); err != nil {
+				return fmt.Errorf("deleting session: %w", err)
+			}
+			fmt.Printf("Deleted session: %s\n", result.Item.SessionTitle)
+			continue
+		}
 
-	layout := tmux.SessionLayout{
-		Name:          selected.WorkspaceName,
-		WorkspacePath: selected.WorkspacePath,
-		SessionID:     sessionID,
-	}
+		var selected *picker.PickerItem
 
-	if err := tmux.CreateWorkspaceSession(layout); err != nil {
-		return fmt.Errorf("creating tmux session: %w", err)
-	}
+		if result.NewRequest {
+			// Ctrl-N pressed: show workspace sub-picker
+			ws, err := picker.RunWorkspacePicker(workspaces)
+			if err != nil {
+				return fmt.Errorf("running workspace picker: %w", err)
+			}
+			if ws == nil {
+				return nil
+			}
+			selected = &picker.PickerItem{
+				WorkspaceName: ws.Name,
+				WorkspacePath: ws.Path,
+				IsNew:         true,
+			}
+		} else {
+			selected = result.Item
+		}
 
-	return tmux.SwitchOrAttach(selected.WorkspaceName)
+		sessionID := selected.SessionID
+		if selected.IsNew {
+			session, err := client.CreateSession(selected.WorkspacePath)
+			if err != nil {
+				return fmt.Errorf("creating session: %w", err)
+			}
+			sessionID = session.ID
+			fmt.Printf("Created new session for %s\n", selected.WorkspaceName)
+		}
+
+		// Track activity
+		ws, err := store.GetWorkspace(selected.WorkspaceName)
+		if err == nil && ws != nil {
+			store.UpsertSessionActivity(ws.ID, sessionID, selected.SessionTitle)
+		}
+
+		layout := tmux.SessionLayout{
+			Name:          selected.WorkspaceName,
+			WorkspacePath: selected.WorkspacePath,
+			SessionID:     sessionID,
+		}
+
+		if err := tmux.CreateWorkspaceSession(layout); err != nil {
+			return fmt.Errorf("creating tmux session: %w", err)
+		}
+
+		return tmux.SwitchOrAttach(selected.WorkspaceName)
+	}
 }

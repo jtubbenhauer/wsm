@@ -155,8 +155,9 @@ func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, st
 }
 
 type PickerResult struct {
-	Item       *PickerItem
-	NewRequest bool
+	Item          *PickerItem
+	NewRequest    bool
+	DeleteRequest bool
 }
 
 func RunFzf(items []PickerItem) (*PickerResult, error) {
@@ -186,8 +187,7 @@ func RunFzf(items []PickerItem) (*PickerResult, error) {
 		"--pointer=▸",
 		"--color=fg:-1,fg+:white:bold,bg:-1,bg+:-1,hl:yellow,hl+:yellow:bold,info:grey,prompt:blue,pointer:blue,header:gray",
 		"--preview-window=hidden",
-		"--bind=ctrl-d:execute-silent(echo delete:{2})+abort",
-		"--expect=ctrl-n",
+		"--expect=ctrl-n,ctrl-d",
 	)
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Stderr = os.Stderr
@@ -221,6 +221,19 @@ func RunFzf(items []PickerItem) (*PickerResult, error) {
 	}
 
 	meta := parts[1]
+
+	if key == "ctrl-d" {
+		if strings.HasPrefix(meta, "new:") {
+			return nil, nil // nothing to delete on a "new session" row
+		}
+		for i := range items {
+			if items[i].SessionID == meta {
+				return &PickerResult{DeleteRequest: true, Item: &items[i]}, nil
+			}
+		}
+		return nil, fmt.Errorf("session %q not found in items", meta)
+	}
+
 	if strings.HasPrefix(meta, "new:") {
 		wsName := strings.TrimPrefix(meta, "new:")
 		for i := range items {
