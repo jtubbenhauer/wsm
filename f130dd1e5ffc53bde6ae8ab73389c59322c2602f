@@ -1,0 +1,49 @@
+internal/tmux/tmux.go
+  8a22b41a8469e772 163-180
+internal/plans/plans.go
+  8a22b41a8469e772 1-71
+internal/opencode/client.go
+  6372c4624488d58b 311,316
+internal/picker/picker.go
+  8a22b41a8469e772 16,129,154,158,174,201-221,419-486
+README.md
+  8a22b41a8469e772 62,71,92-105
+cmd/root.go
+  8a22b41a8469e772 11,103-109,195-222
+  6372c4624488d58b 6,60,63-68,99,110-111,170-194
+cmd/plan.go
+  8a22b41a8469e772 1-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "f130dd1e5ffc53bde6ae8ab73389c59322c2602f",
+  "prompts": {
+    "6372c4624488d58b": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29ede0920ffeVz2qy5pSy4jbA2",
+        "model": "github-copilot/claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer",
+      "messages": [],
+      "total_additions": 75,
+      "total_deletions": 45,
+      "accepted_lines": 44,
+      "overriden_lines": 0
+    },
+    "8a22b41a8469e772": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29b856b21ffewd2w3o8pWOcU8l",
+        "model": "github-copilot/claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer",
+      "messages": [],
+      "total_additions": 322,
+      "total_deletions": 5,
+      "accepted_lines": 320,
+      "overriden_lines": 0
+    }
+  }
+}
