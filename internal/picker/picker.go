@@ -27,16 +27,16 @@ const (
 )
 
 var workspaceColors = []string{
-	"\033[38;5;114m", // green
-	"\033[38;5;180m", // gold
-	"\033[38;5;139m", // mauve
-	"\033[38;5;74m",  // blue
-	"\033[38;5;173m", // salmon
-	"\033[38;5;109m", // teal
-	"\033[38;5;176m", // pink
-	"\033[38;5;149m", // lime
-	"\033[38;5;146m", // lavender
-	"\033[38;5;216m", // peach
+	"\033[38;5;114m",         // green
+	"\033[38;5;180m",         // gold
+	"\033[38;5;139m",         // mauve
+	"\033[38;2;88;166;255m",  // gh blue (#58a6ff)
+	"\033[38;5;173m",         // salmon
+	"\033[38;5;109m",         // teal
+	"\033[38;2;188;140;255m", // gh purple (#bc8cff)
+	"\033[38;5;149m",         // lime
+	"\033[38;5;146m",         // lavender
+	"\033[38;2;210;153;34m",  // gh yellow (#d29922)
 }
 
 // SessionsByDir is a map of directory path to top-level sessions for that directory
@@ -52,46 +52,27 @@ type PickerItem struct {
 	Status        string // "busy", "retry", or "" (idle)
 }
 
-func FormatPickerLine(item PickerItem, width int) string {
+func FormatPickerLine(item PickerItem, width int, maxWsWidth int) string {
 	width -= 4 // account for fzf pointer and chrome
 	if width < 40 {
 		width = 40
 	}
 
 	wsColor := colorForWorkspace(item.WorkspaceName)
-	wsName := item.WorkspaceName
-
-	if item.IsNew {
-		ageField := "   +"
-		title := "Create new session"
-		leftW := 2 + 4 + 2 + len(title) // indicator + age + gap + title
-		rightW := len(wsName)
-		padding := width - leftW - rightW
-		if padding < 2 {
-			padding = 2
-		}
-		return ansiDimBright + "  " + ageField + "  " + title +
-			strings.Repeat(" ", padding) + wsColor + wsName + ansiReset
-	}
+	wsName := shortName(item.WorkspaceName)
+	paddedWs := wsColor + wsName + strings.Repeat(" ", maxWsWidth-len(wsName)) + ansiReset
 
 	indicator := statusIndicator(item.Status)
 	age := coloredAge(item.UpdatedAt)
 
-	maxTitle := width - 2 - 4 - 2 - 2 - len(wsName)
+	// maxWsWidth + 2(gap) + 2(indicator) + 4(age) + 2(gap)
+	maxTitle := width - maxWsWidth - 10
 	if maxTitle < 10 {
 		maxTitle = 10
 	}
 	title := truncate(item.SessionTitle, maxTitle)
 
-	leftW := 2 + 4 + 2 + len(title) // indicator + age + gap + title (visible chars)
-	rightW := len(wsName)
-	padding := width - leftW - rightW
-	if padding < 2 {
-		padding = 2
-	}
-
-	return indicator + age + "  " + title +
-		strings.Repeat(" ", padding) + wsColor + wsName + ansiReset
+	return paddedWs + "  " + indicator + age + "  " + title
 }
 
 func ParsePickerLine(line string) (sessionID string, isNew bool) {
@@ -110,18 +91,7 @@ func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, st
 	var items []PickerItem
 
 	for _, ws := range workspaces {
-		sessions := sessionsByDir[ws.Path]
-
-		if len(sessions) == 0 {
-			items = append(items, PickerItem{
-				WorkspaceName: ws.Name,
-				WorkspacePath: ws.Path,
-				IsNew:         true,
-			})
-			continue
-		}
-
-		for _, s := range sessions {
+		for _, s := range sessionsByDir[ws.Path] {
 			status := ""
 			if st, ok := statuses[s.ID]; ok {
 				status = st.Type
@@ -135,12 +105,6 @@ func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, st
 				Status:        status,
 			})
 		}
-
-		items = append(items, PickerItem{
-			WorkspaceName: ws.Name,
-			WorkspacePath: ws.Path,
-			IsNew:         true,
-		})
 	}
 
 	sort.Slice(items, func(i, j int) bool {
@@ -166,9 +130,16 @@ type PickerResult struct {
 func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 	width := getTerminalWidth()
 
+	maxWsWidth := 0
+	for _, item := range items {
+		if n := len(shortName(item.WorkspaceName)); n > maxWsWidth {
+			maxWsWidth = n
+		}
+	}
+
 	var lines []string
 	for _, item := range items {
-		displayed := FormatPickerLine(item, width)
+		displayed := FormatPickerLine(item, width, maxWsWidth)
 		meta := item.SessionID
 		if item.IsNew {
 			meta = "new:" + item.WorkspaceName
@@ -178,10 +149,11 @@ func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 
 	input := strings.Join(lines, "\n")
 
-	header := "  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-w: filter workspace  ·  ctrl-c: cancel"
+	header := "  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-w: filter workspace  ·  ctrl-c: cancel\n "
 	if activeFilter != "" {
 		wsColor := colorForWorkspace(activeFilter)
-		header = "  " + wsColor + "[" + activeFilter + "]" + ansiReset + "  ctrl-n: new  ·  ctrl-d: delete  ·  ctrl-w: change filter  ·  ctrl-c: cancel"
+		filterDisplay := shortName(activeFilter)
+		header = "  " + wsColor + "[" + filterDisplay + "]" + ansiReset + "  ctrl-n: new  ·  ctrl-d: delete  ·  ctrl-w: change filter  ·  ctrl-c: cancel\n "
 	}
 
 	cmd := exec.Command("fzf",
@@ -194,7 +166,8 @@ func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 		"--header="+header,
 		"--prompt=  ",
 		"--pointer=▸",
-		"--color=fg:-1,fg+:white:bold,bg:-1,bg+:-1,hl:yellow,hl+:yellow:bold,info:grey,prompt:blue,pointer:blue,header:gray",
+		"--info=hidden",
+		"--color=fg:#e6edf3,fg+:#f0f6fc:bold,bg:#0d1117,bg+:#161b22,hl:#3fb950,hl+:#3fb950:bold,info:#8b949e,prompt:#58a6ff,pointer:#58a6ff,header:#8b949e,gutter:#0d1117,border:#30363d",
 		"--preview-window=hidden",
 		"--expect=ctrl-n,ctrl-d,ctrl-w",
 	)
@@ -312,7 +285,8 @@ func RunWorkspacePicker(workspaces []db.Workspace, includeAll bool) (*db.Workspa
 		"--header="+wsHeader,
 		"--prompt=  ",
 		"--pointer=▸",
-		"--color=fg:-1,fg+:white:bold,bg:-1,bg+:-1,hl:yellow,hl+:yellow:bold,info:grey,prompt:blue,pointer:blue,header:gray",
+		"--info=hidden",
+		"--color=fg:#e6edf3,fg+:#f0f6fc:bold,bg:#0d1117,bg+:#161b22,hl:#3fb950,hl+:#3fb950:bold,info:#8b949e,prompt:#58a6ff,pointer:#58a6ff,header:#8b949e,gutter:#0d1117,border:#30363d",
 		"--preview-window=hidden",
 	)
 	cmd.Stdin = strings.NewReader(input)
@@ -348,6 +322,13 @@ func RunWorkspacePicker(workspaces []db.Workspace, includeAll bool) (*db.Workspa
 		}
 	}
 	return nil, fmt.Errorf("workspace with path %q not found", path)
+}
+
+func shortName(name string) string {
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		return name[i+1:]
+	}
+	return name
 }
 
 func colorForWorkspace(name string) string {
