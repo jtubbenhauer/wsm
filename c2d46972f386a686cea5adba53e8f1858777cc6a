@@ -1,0 +1,23 @@
+README.md
+  817fe2332c0ce18f 1-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "c2d46972f386a686cea5adba53e8f1858777cc6a",
+  "prompts": {
+    "817fe2332c0ce18f": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29f439ac0ffeIamJBMxwXsJjm6",
+        "model": "github-copilot/claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer",
+      "messages": [],
+      "total_additions": 97,
+      "total_deletions": 0,
+      "accepted_lines": 97,
+      "overriden_lines": 0
+    }
+  }
+}
