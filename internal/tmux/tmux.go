@@ -198,9 +198,6 @@ func switchToOpenCodeSession(name string, layout SessionLayout) error {
 	}
 
 	if targetPaneID == "" {
-		if err := EnsureParkingWindow(name); err != nil {
-			return fmt.Errorf("ensuring parking window: %w", err)
-		}
 		paneID, err := CreateParkedPane(name, layout)
 		if err != nil {
 			return fmt.Errorf("creating parked pane: %w", err)
@@ -307,8 +304,12 @@ func EnsureParkingWindow(session string) error {
 
 func CreateParkedPane(session string, layout SessionLayout) (string, error) {
 	attachCmd := openCodeAttachCommand(layout.SessionID, layout.WorkspacePath)
-	target := fmt.Sprintf("%s:%s", session, parkingWindow)
-	cmd := exec.Command("tmux", "split-window", "-t", target, "-d",
+	suffix := layout.SessionID
+	if len(suffix) > 8 {
+		suffix = suffix[len(suffix)-8:]
+	}
+	windowName := "_park_" + suffix
+	cmd := exec.Command("tmux", "new-window", "-t", session+":", "-n", windowName, "-d",
 		"-c", layout.WorkspacePath,
 		"-P", "-F", "#{pane_id}",
 		"sh", "-c", attachCmd)
@@ -317,6 +318,15 @@ func CreateParkedPane(session string, layout SessionLayout) (string, error) {
 		return "", fmt.Errorf("creating parked pane: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func CleanupParkedPane(sessionName, sessionID string) {
+	name := SanitiseName(sessionName)
+	paneID := GetEnvironment(name, paneEnvKey(sessionID))
+	if paneID != "" {
+		exec.Command("tmux", "kill-pane", "-t", paneID).Run()
+	}
+	exec.Command("tmux", "set-environment", "-u", "-t", name, paneEnvKey(sessionID)).Run()
 }
 
 func RespawnPane(paneID string, layout SessionLayout) error {

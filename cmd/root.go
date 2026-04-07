@@ -118,6 +118,7 @@ func runPicker() error {
 			if err := client.DeleteSession(result.Item.SessionID); err != nil {
 				return fmt.Errorf("deleting session: %w", err)
 			}
+			tmux.CleanupParkedPane(result.Item.WorkspaceName, result.Item.SessionID)
 			fmt.Printf("Deleted session: %s\n", result.Item.SessionTitle)
 			continue
 		}
