@@ -1,0 +1,23 @@
+internal/tmux/tmux.go
+  7e18bb45e5464e38 101-104,107,132-136,145-146,153-186,200-264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "bc64f15021d558ad7f8fef745d35c4ec07f710b0",
+  "prompts": {
+    "7e18bb45e5464e38": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29aae8a1cffe5tr01BM2WzkenV",
+        "model": "github-copilot/claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer",
+      "messages": [],
+      "total_additions": 159,
+      "total_deletions": 57,
+      "accepted_lines": 112,
+      "overriden_lines": 0
+    }
+  }
+}
