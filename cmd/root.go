@@ -65,7 +65,11 @@ func runPicker() error {
 			if err != nil {
 				return fmt.Errorf("fetching sessions: %w", err)
 			}
-			items = picker.BuildPickerItems(workspaces, sessionsByDir, statuses)
+			labels, _ := store.GetSessionLabels()
+			if labels == nil {
+				labels = make(map[string]string)
+			}
+			items = picker.BuildPickerItems(workspaces, sessionsByDir, statuses, labels)
 		}
 
 		activeFilter := ""
@@ -115,6 +119,30 @@ func runPicker() error {
 				return fmt.Errorf("deleting session: %w", err)
 			}
 			fmt.Printf("Deleted session: %s\n", result.Item.SessionTitle)
+			continue
+		}
+
+		if result.RenameRequest {
+			newLabel, err := picker.RunRenamePrompt(result.Item.SessionTitle)
+			if err != nil {
+				return fmt.Errorf("running rename prompt: %w", err)
+			}
+			if newLabel == "" || newLabel == result.Item.SessionTitle {
+				continue
+			}
+			ws, err := store.GetWorkspace(result.Item.WorkspaceName)
+			if err != nil {
+				return fmt.Errorf("getting workspace: %w", err)
+			}
+			if ws == nil {
+				fmt.Fprintf(os.Stderr, "workspace %q not found\n", result.Item.WorkspaceName)
+				continue
+			}
+			// Ensure session_activity row exists before updating label
+			if err := store.UpsertSessionActivity(ws.ID, result.Item.SessionID, newLabel); err != nil {
+				return fmt.Errorf("renaming session: %w", err)
+			}
+			fmt.Printf("Renamed session to: %s\n", newLabel)
 			continue
 		}
 

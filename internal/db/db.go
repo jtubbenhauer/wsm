@@ -204,6 +204,42 @@ func (db *DB) UpsertSessionActivity(workspaceID int64, sessionID string, label s
 	return nil
 }
 
+func (db *DB) UpdateSessionLabel(workspaceID int64, sessionID, label string) error {
+	result, err := db.conn.Exec(
+		`UPDATE session_activity SET label = ? WHERE workspace_id = ? AND session_id = ?`,
+		nullString(label), workspaceID, sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("updating session label: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("session activity not found for workspace %d, session %q", workspaceID, sessionID)
+	}
+	return nil
+}
+
+func (db *DB) GetSessionLabels() (map[string]string, error) {
+	rows, err := db.conn.Query(`SELECT session_id, label FROM session_activity WHERE label IS NOT NULL AND label != ''`)
+	if err != nil {
+		return nil, fmt.Errorf("querying session labels: %w", err)
+	}
+	defer rows.Close()
+
+	labels := make(map[string]string)
+	for rows.Next() {
+		var sessionID, label string
+		if err := rows.Scan(&sessionID, &label); err != nil {
+			return nil, fmt.Errorf("scanning session label: %w", err)
+		}
+		labels[sessionID] = label
+	}
+	return labels, rows.Err()
+}
+
 func (db *DB) GetSessionActivities(workspaceID int64) ([]SessionActivity, error) {
 	rows, err := db.conn.Query(
 		`SELECT workspace_id, session_id, last_focused, label

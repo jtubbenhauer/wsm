@@ -4,8 +4,32 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 )
+
+var debugLogPath string
+
+func init() {
+	stateDir := os.Getenv("XDG_STATE_HOME")
+	if stateDir == "" {
+		home, _ := os.UserHomeDir()
+		stateDir = filepath.Join(home, ".local", "state")
+	}
+	debugLogPath = filepath.Join(stateDir, "wsm", "debug.log")
+}
+
+func logDebug(format string, args ...interface{}) {
+	os.MkdirAll(filepath.Dir(debugLogPath), 0o755)
+	f, err := os.OpenFile(debugLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	ts := time.Now().Format("15:04:05.000")
+	fmt.Fprintf(f, "[%s] %s\n", ts, fmt.Sprintf(format, args...))
+}
 
 func HasSession(name string) bool {
 	cmd := exec.Command("tmux", "has-session", "-t", name)
@@ -145,18 +169,28 @@ func CreateWorkspaceSession(layout SessionLayout) error {
 // switchToOpenCodeSession swaps the active opencode pane with a parked pane
 // for the target session, preserving both processes alive.
 func switchToOpenCodeSession(name string, layout SessionLayout) error {
+	logDebug("switchToOpenCodeSession: name=%s targetSession=%s", name, layout.SessionID)
+
 	currentSessionID := GetEnvironment(name, "WSM_SESSION_ID")
+	logDebug("  currentSessionID=%s", currentSessionID)
+
 	if currentSessionID == layout.SessionID {
+		logDebug("  same session, just selecting window 2")
 		return SelectWindow(name, 2)
 	}
 
 	targetPaneID := GetEnvironment(name, paneEnvKey(layout.SessionID))
+	logDebug("  targetPaneID from env: %q", targetPaneID)
 
 	if targetPaneID != "" {
-		switch CheckPane(targetPaneID) {
+		targetState := CheckPane(targetPaneID)
+		logDebug("  targetPane state: %d", targetState)
+		switch targetState {
 		case PaneGone:
+			logDebug("  targetPane gone, will create new")
 			targetPaneID = ""
 		case PaneDead:
+			logDebug("  targetPane dead, respawning")
 			if err := RespawnPane(targetPaneID, layout); err != nil {
 				return fmt.Errorf("respawning dead pane: %w", err)
 			}
@@ -172,24 +206,49 @@ func switchToOpenCodeSession(name string, layout SessionLayout) error {
 			return fmt.Errorf("creating parked pane: %w", err)
 		}
 		targetPaneID = paneID
+		logDebug("  created parked pane: %s", targetPaneID)
 		if err := SetEnvironment(name, paneEnvKey(layout.SessionID), targetPaneID); err != nil {
 			return fmt.Errorf("storing pane mapping: %w", err)
 		}
 	}
 
 	activePaneID := GetEnvironment(name, paneEnvKey(currentSessionID))
+	logDebug("  activePaneID from env: %q (key=%s)", activePaneID, paneEnvKey(currentSessionID))
+
+	if activePaneID != "" {
+		activeState := CheckPane(activePaneID)
+		logDebug("  activePane state: %d", activeState)
+		if activeState == PaneGone {
+			activePaneID = ""
+		}
+	}
 	if activePaneID == "" {
-		return fmt.Errorf("no tracked pane for active session %s", currentSessionID)
+		activePaneID = discoverOpenCodePane(name)
+		logDebug("  discovered activePaneID: %q", activePaneID)
+		if activePaneID == "" {
+			return fmt.Errorf("cannot find opencode pane in session %s", name)
+		}
+		if currentSessionID != "" {
+			SetEnvironment(name, paneEnvKey(currentSessionID), activePaneID)
+		}
 	}
 
+	logDebug("  swapping active=%s <-> target=%s", activePaneID, targetPaneID)
 	if err := SwapPanes(activePaneID, targetPaneID); err != nil {
 		return fmt.Errorf("swapping panes: %w", err)
+	}
+
+	// Focus the swapped-in pane so the correct content is visible
+	selectCmd := exec.Command("tmux", "select-pane", "-t", targetPaneID)
+	if err := selectCmd.Run(); err != nil {
+		logDebug("  select-pane failed: %v", err)
 	}
 
 	if err := SetEnvironment(name, "WSM_SESSION_ID", layout.SessionID); err != nil {
 		return fmt.Errorf("setting session env var: %w", err)
 	}
 
+	logDebug("  done, selecting window 2")
 	return SelectWindow(name, 2)
 }
 
@@ -212,12 +271,16 @@ func paneEnvKey(sessionID string) string {
 }
 
 func CheckPane(paneID string) PaneState {
-	cmd := exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{pane_dead}")
+	cmd := exec.Command("tmux", "display-message", "-t", paneID, "-p", "#{pane_id}\t#{pane_dead}")
 	out, err := cmd.Output()
 	if err != nil {
 		return PaneGone
 	}
-	if strings.TrimSpace(string(out)) == "1" {
+	parts := strings.SplitN(strings.TrimSpace(string(out)), "\t", 2)
+	if len(parts) != 2 || parts[0] != paneID {
+		return PaneGone
+	}
+	if parts[1] == "1" {
 		return PaneDead
 	}
 	return PaneAlive
@@ -260,6 +323,37 @@ func RespawnPane(paneID string, layout SessionLayout) error {
 	attachCmd := openCodeAttachCommand(layout.SessionID, layout.WorkspacePath)
 	cmd := exec.Command("tmux", "respawn-pane", "-t", paneID, "sh", "-c", attachCmd)
 	return cmd.Run()
+}
+
+func discoverOpenCodePane(session string) string {
+	cmd := exec.Command("tmux", "list-panes", "-t", session+":opencode", "-F", "#{pane_id}\t#{pane_current_command}")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	// Pick the first pane whose command is NOT a plain shell
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		parts := strings.SplitN(line, "\t", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		paneCmd := parts[1]
+		if paneCmd == "zsh" || paneCmd == "bash" || paneCmd == "fish" {
+			continue
+		}
+		logDebug("  discoverOpenCodePane: picked %s (cmd=%s)", parts[0], paneCmd)
+		return parts[0]
+	}
+	// All panes are shells — fall back to first pane
+	lines := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)
+	if len(lines) > 0 {
+		parts := strings.SplitN(lines[0], "\t", 2)
+		if len(parts) >= 1 {
+			logDebug("  discoverOpenCodePane: fallback to first pane %s", parts[0])
+			return parts[0]
+		}
+	}
+	return ""
 }
 
 func RunInTerminal(args ...string) error {

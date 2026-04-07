@@ -59,21 +59,21 @@ func FormatPickerLine(item PickerItem, width int, maxWsWidth int) string {
 		width = 40
 	}
 
+	indicator := statusIndicator(item.Status)
+	age := colouredAge(item.UpdatedAt)
+
 	wsColour := colourForWorkspace(item.WorkspaceName)
 	wsName := shortName(item.WorkspaceName)
 	paddedWs := wsColour + wsName + strings.Repeat(" ", maxWsWidth-len(wsName)) + ansiReset
 
-	indicator := statusIndicator(item.Status)
-	age := colouredAge(item.UpdatedAt)
-
-	// maxWsWidth + 2(gap) + 2(indicator) + 4(age) + 2(gap)
+	// 4(age) + 2(indicator) + 2(gap) + maxWsWidth + 2(gap)
 	maxTitle := width - maxWsWidth - 10
 	if maxTitle < 10 {
 		maxTitle = 10
 	}
 	title := truncate(item.SessionTitle, maxTitle)
 
-	return paddedWs + "  " + indicator + age + "  " + title
+	return indicator + age + "  " + paddedWs + "  " + title
 }
 
 func ParsePickerLine(line string) (sessionID string, isNew bool) {
@@ -88,7 +88,7 @@ func ParsePickerLine(line string) (sessionID string, isNew bool) {
 	return meta, false
 }
 
-func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, statuses map[string]opencode.SessionStatus) []PickerItem {
+func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, statuses map[string]opencode.SessionStatus, labels map[string]string) []PickerItem {
 	var items []PickerItem
 
 	for _, ws := range workspaces {
@@ -97,11 +97,15 @@ func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, st
 			if st, ok := statuses[s.ID]; ok {
 				status = st.Type
 			}
+			title := s.Title
+			if label, ok := labels[s.ID]; ok {
+				title = label
+			}
 			items = append(items, PickerItem{
 				WorkspaceName: ws.Name,
 				WorkspacePath: ws.Path,
 				SessionID:     s.ID,
-				SessionTitle:  s.Title,
+				SessionTitle:  title,
 				UpdatedAt:     s.UpdatedAt(),
 				Status:        status,
 			})
@@ -125,6 +129,7 @@ type PickerResult struct {
 	Item            *PickerItem
 	NewRequest      bool
 	DeleteRequest   bool
+	RenameRequest   bool
 	WorkspaceFilter bool
 	PlanRequest     bool
 }
@@ -151,11 +156,11 @@ func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 
 	input := strings.Join(lines, "\n")
 
-	header := "  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-w: filter workspace  ·  ctrl-o: view plan  ·  ctrl-c: cancel\n "
+	header := "  ctrl-n: new session  ·  ctrl-d: delete  ·  ctrl-r: rename  ·  ctrl-w: filter workspace  ·  ctrl-o: view plan  ·  ctrl-c: cancel\n "
 	if activeFilter != "" {
 		wsColour := colourForWorkspace(activeFilter)
 		filterDisplay := shortName(activeFilter)
-		header = "  " + wsColour + "[" + filterDisplay + "]" + ansiReset + "  ctrl-n: new  ·  ctrl-d: delete  ·  ctrl-w: change filter  ·  ctrl-o: plan  ·  ctrl-c: cancel\n "
+		header = "  " + wsColour + "[" + filterDisplay + "]" + ansiReset + "  ctrl-n: new  ·  ctrl-d: delete  ·  ctrl-r: rename  ·  ctrl-w: change filter  ·  ctrl-o: plan  ·  ctrl-c: cancel\n "
 	}
 
 	cmd := exec.Command("fzf",
@@ -171,7 +176,7 @@ func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 		"--info=hidden",
 		"--color=fg:#e6edf3,fg+:#f0f6fc:bold,bg:#0d1117,bg+:#161b22,hl:#3fb950,hl+:#3fb950:bold,info:#8b949e,prompt:#58a6ff,pointer:#58a6ff,header:#8b949e,gutter:#0d1117,border:#30363d",
 		"--preview-window=hidden",
-		"--expect=ctrl-n,ctrl-d,ctrl-w,ctrl-o",
+		"--expect=ctrl-n,ctrl-d,ctrl-r,ctrl-w,ctrl-o",
 	)
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Stderr = os.Stderr
@@ -243,6 +248,18 @@ func RunFzf(items []PickerItem, activeFilter string) (*PickerResult, error) {
 		return nil, fmt.Errorf("session %q not found in items", meta)
 	}
 
+	if key == "ctrl-r" {
+		if strings.HasPrefix(meta, "new:") {
+			return nil, nil // nothing to rename on a "new session" row
+		}
+		for i := range items {
+			if items[i].SessionID == meta {
+				return &PickerResult{RenameRequest: true, Item: &items[i]}, nil
+			}
+		}
+		return nil, fmt.Errorf("session %q not found in items", meta)
+	}
+
 	if strings.HasPrefix(meta, "new:") {
 		wsName := strings.TrimPrefix(meta, "new:")
 		for i := range items {
@@ -269,6 +286,47 @@ func FilterItemsByWorkspace(items []PickerItem, workspaceName string) []PickerIt
 		}
 	}
 	return filtered
+}
+
+func RunRenamePrompt(currentTitle string) (string, error) {
+	cmd := exec.Command("fzf",
+		"--ansi",
+		"--no-multi",
+		"--layout=reverse",
+		"--no-separator",
+		"--header=  Rename session (enter to confirm, esc to cancel)",
+		"--prompt=  ",
+		"--print-query",
+		"--query="+currentTitle,
+		"--info=hidden",
+		"--color=fg:#e6edf3,fg+:#f0f6fc:bold,bg:#0d1117,bg+:#161b22,hl:#3fb950,hl+:#3fb950:bold,info:#8b949e,prompt:#58a6ff,pointer:#58a6ff,header:#8b949e,gutter:#0d1117,border:#30363d",
+		"--preview-window=hidden",
+	)
+	cmd.Stdin = strings.NewReader("")
+	cmd.Stderr = os.Stderr
+
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code := exitErr.ExitCode()
+			// fzf exits 1 when no match (expected with empty input + print-query)
+			if code == 1 {
+				query := strings.SplitN(strings.TrimRight(string(out), "\n"), "\n", 2)[0]
+				query = strings.TrimSpace(query)
+				if query == "" {
+					return "", nil
+				}
+				return query, nil
+			}
+			if code == 130 {
+				return "", nil
+			}
+		}
+		return "", fmt.Errorf("running rename prompt: %w", err)
+	}
+
+	query := strings.SplitN(strings.TrimRight(string(out), "\n"), "\n", 2)[0]
+	return strings.TrimSpace(query), nil
 }
 
 func RunWorkspacePicker(workspaces []db.Workspace, includeAll bool) (*db.Workspace, error) {
