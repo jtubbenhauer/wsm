@@ -10,15 +10,15 @@ import (
 )
 
 var (
-	worktreeBase     string
-	worktreeSymlinks string
+	workspaceBase     string
+	workspaceSymlinks string
 )
 
-var defaultSymlinks = []string{"node_modules", ".env", ".env.local"}
+var defaultSymlinks = []string{}
 
-var worktreeCmd = &cobra.Command{
-	Use:   "worktree <parent-name> <branch>",
-	Short: "Create a git worktree and register as workspace",
+var workspaceCmd = &cobra.Command{
+	Use:   "workspace <parent-name> <branch>",
+	Short: "Create a git worktree from a workspace and register it",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		parentName := args[0]
@@ -39,11 +39,11 @@ var worktreeCmd = &cobra.Command{
 		}
 
 		symlinks := defaultSymlinks
-		if worktreeSymlinks != "" {
-			symlinks = strings.Split(worktreeSymlinks, ",")
+		if workspaceSymlinks != "" {
+			symlinks = strings.Split(workspaceSymlinks, ",")
 		}
 
-		wtPath, err := git.CreateWorktree(parent.Path, branch, worktreeBase)
+		wtPath, err := git.CreateWorktree(parent.Path, branch, workspaceBase)
 		if err != nil {
 			return err
 		}
@@ -64,7 +64,7 @@ var worktreeCmd = &cobra.Command{
 }
 
 func init() {
-	worktreeCmd.Flags().StringVar(&worktreeBase, "base", "", "Base ref to create branch from")
-	worktreeCmd.Flags().StringVar(&worktreeSymlinks, "symlinks", "", "Comma-separated list of symlinks (default: node_modules,.env,.env.local)")
-	rootCmd.AddCommand(worktreeCmd)
+	workspaceCmd.Flags().StringVar(&workspaceBase, "base", "", "Base ref to create branch from")
+	workspaceCmd.Flags().StringVar(&workspaceSymlinks, "symlinks", "", "Comma-separated list of symlinks to create in the worktree")
+	rootCmd.AddCommand(workspaceCmd)
 }
