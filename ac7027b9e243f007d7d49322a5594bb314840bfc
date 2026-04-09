@@ -1,0 +1,23 @@
+cmd/workspace.go
+  a4d7b9d0a8bc0da9 1-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "ac7027b9e243f007d7d49322a5594bb314840bfc",
+  "prompts": {
+    "a4d7b9d0a8bc0da9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29055fdacffeAQd1wRH3Zyrwaq",
+        "model": "github-copilot/claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer",
+      "messages": [],
+      "total_additions": 70,
+      "total_deletions": 0,
+      "accepted_lines": 70,
+      "overriden_lines": 0
+    }
+  }
+}
