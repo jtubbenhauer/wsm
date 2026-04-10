@@ -13,5 +13,6 @@ mv wsm "$INSTALL_DIR/wsm"
 
 echo "Done! Make sure ${INSTALL_DIR} is in your PATH."
 echo ""
-echo "tmux binding (add to ~/.tmux.conf):"
-echo '  bind-key w run-shell "tmux popup -E -w 80% -h 80% wsm"'
+echo "tmux bindings (add to ~/.tmux.conf):"
+echo '  bind-key s run-shell "tmux popup -E -w 80% -h 80% wsm"'
+echo '  bind-key w display-popup -E -w 60% -h 40% "wsm switch"'

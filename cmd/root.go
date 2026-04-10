@@ -111,6 +111,33 @@ func runPicker() error {
 			continue
 		}
 
+		if result.KillRequest {
+			activeSessions := tmux.ListSessions()
+			sessionSet := make(map[string]bool, len(activeSessions))
+			for _, s := range activeSessions {
+				sessionSet[s] = true
+			}
+			var activeWorkspaces []db.Workspace
+			for _, ws := range workspaces {
+				if sessionSet[tmux.SanitiseName(ws.Name)] {
+					activeWorkspaces = append(activeWorkspaces, ws)
+				}
+			}
+			ws, err := picker.RunKillSessionPicker(activeWorkspaces)
+			if err != nil {
+				return fmt.Errorf("running kill session picker: %w", err)
+			}
+			if ws != nil {
+				if err := tmux.KillSession(ws.Name); err != nil {
+					fmt.Fprintf(os.Stderr, "failed to kill session: %v\n", err)
+				} else {
+					fmt.Printf("Killed session: %s\n", ws.Name)
+				}
+			}
+			items = nil
+			continue
+		}
+
 		// any action other than filter change invalidates the cache
 		items = nil
 

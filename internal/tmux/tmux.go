@@ -32,17 +32,17 @@ func logDebug(format string, args ...interface{}) {
 }
 
 func HasSession(name string) bool {
-	cmd := exec.Command("tmux", "has-session", "-t", name)
+	cmd := exec.Command("tmux", "has-session", "-t", "="+name)
 	return cmd.Run() == nil
 }
 
 func SwitchClient(name string) error {
-	cmd := exec.Command("tmux", "switch-client", "-t", name)
+	cmd := exec.Command("tmux", "switch-client", "-t", "="+name)
 	return cmd.Run()
 }
 
 func AttachSession(name string) error {
-	cmd := exec.Command("tmux", "attach-session", "-t", name)
+	cmd := exec.Command("tmux", "attach-session", "-t", "="+name)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -50,19 +50,19 @@ func AttachSession(name string) error {
 }
 
 func KillPane(sessionName string, windowIndex, paneIndex int) error {
-	target := fmt.Sprintf("%s:%d.%d", sessionName, windowIndex, paneIndex)
+	target := fmt.Sprintf("=%s:%d.%d", sessionName, windowIndex, paneIndex)
 	cmd := exec.Command("tmux", "kill-pane", "-t", target)
 	return cmd.Run()
 }
 
 func SendKeys(sessionName string, windowIndex, paneIndex int, keys string) error {
-	target := fmt.Sprintf("%s:%d.%d", sessionName, windowIndex, paneIndex)
+	target := fmt.Sprintf("=%s:%d.%d", sessionName, windowIndex, paneIndex)
 	cmd := exec.Command("tmux", "send-keys", "-t", target, keys, "Enter")
 	return cmd.Run()
 }
 
 func SelectWindow(sessionName string, windowIndex int) error {
-	target := fmt.Sprintf("%s:%d", sessionName, windowIndex)
+	target := fmt.Sprintf("=%s:%d", sessionName, windowIndex)
 	cmd := exec.Command("tmux", "select-window", "-t", target)
 	return cmd.Run()
 }
@@ -77,12 +77,12 @@ func SanitiseName(name string) string {
 }
 
 func SetEnvironment(sessionName, key, value string) error {
-	cmd := exec.Command("tmux", "set-environment", "-t", sessionName, key, value)
+	cmd := exec.Command("tmux", "set-environment", "-t", "="+sessionName, key, value)
 	return cmd.Run()
 }
 
 func GetEnvironment(sessionName, key string) string {
-	cmd := exec.Command("tmux", "show-environment", "-t", sessionName, key)
+	cmd := exec.Command("tmux", "show-environment", "-t", "="+sessionName, key)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -123,7 +123,7 @@ func CreateWorkspaceSession(layout SessionLayout) error {
 	}
 
 	// Window 2: opencode attach via wsm attach (capture pane ID for parking)
-	createOC := exec.Command("tmux", "new-window", "-t", name, "-n", "opencode", "-c", layout.WorkspacePath, "-P", "-F", "#{pane_id}", "sh", "-c", attachCmd)
+	createOC := exec.Command("tmux", "new-window", "-t", "="+name, "-n", "opencode", "-c", layout.WorkspacePath, "-P", "-F", "#{pane_id}", "sh", "-c", attachCmd)
 	ocPaneOut, err := createOC.Output()
 	if err != nil {
 		return fmt.Errorf("creating opencode window: %w", err)
@@ -131,19 +131,19 @@ func CreateWorkspaceSession(layout SessionLayout) error {
 	ocPaneID := strings.TrimSpace(string(ocPaneOut))
 
 	// Split right for shell
-	splitCmd := exec.Command("tmux", "split-window", "-h", "-t", fmt.Sprintf("%s:2", name), "-c", layout.WorkspacePath)
+	splitCmd := exec.Command("tmux", "split-window", "-h", "-t", fmt.Sprintf("=%s:2", name), "-c", layout.WorkspacePath)
 	if err := splitCmd.Run(); err != nil {
 		return fmt.Errorf("splitting opencode window: %w", err)
 	}
 
 	// Select the left pane (opencode)
-	selectPane := exec.Command("tmux", "select-pane", "-t", fmt.Sprintf("%s:2.1", name))
+	selectPane := exec.Command("tmux", "select-pane", "-t", fmt.Sprintf("=%s:2.1", name))
 	if err := selectPane.Run(); err != nil {
 		return fmt.Errorf("selecting opencode pane: %w", err)
 	}
 
 	// Window 3: lazygit (direct execution)
-	createLazygit := exec.Command("tmux", "new-window", "-t", name, "-n", "lazygit", "-c", layout.WorkspacePath, "lazygit")
+	createLazygit := exec.Command("tmux", "new-window", "-t", "="+name, "-n", "lazygit", "-c", layout.WorkspacePath, "lazygit")
 	if err := createLazygit.Run(); err != nil {
 		return fmt.Errorf("creating lazygit window: %w", err)
 	}
@@ -289,7 +289,7 @@ func SwapPanes(paneA, paneB string) error {
 }
 
 func HasWindow(session, windowName string) bool {
-	target := fmt.Sprintf("%s:%s", session, windowName)
+	target := fmt.Sprintf("=%s:%s", session, windowName)
 	cmd := exec.Command("tmux", "list-panes", "-t", target)
 	return cmd.Run() == nil
 }
@@ -298,7 +298,7 @@ func EnsureParkingWindow(session string) error {
 	if HasWindow(session, parkingWindow) {
 		return nil
 	}
-	cmd := exec.Command("tmux", "new-window", "-t", session+":", "-n", parkingWindow, "-d")
+	cmd := exec.Command("tmux", "new-window", "-t", "="+session+":", "-n", parkingWindow, "-d")
 	return cmd.Run()
 }
 
@@ -309,7 +309,7 @@ func CreateParkedPane(session string, layout SessionLayout) (string, error) {
 		suffix = suffix[len(suffix)-8:]
 	}
 	windowName := "_park_" + suffix
-	cmd := exec.Command("tmux", "new-window", "-t", session+":", "-n", windowName, "-d",
+	cmd := exec.Command("tmux", "new-window", "-t", "="+session+":", "-n", windowName, "-d",
 		"-c", layout.WorkspacePath,
 		"-P", "-F", "#{pane_id}",
 		"sh", "-c", attachCmd)
@@ -326,7 +326,7 @@ func CleanupParkedPane(sessionName, sessionID string) {
 	if paneID != "" {
 		exec.Command("tmux", "kill-pane", "-t", paneID).Run()
 	}
-	exec.Command("tmux", "set-environment", "-u", "-t", name, paneEnvKey(sessionID)).Run()
+	exec.Command("tmux", "set-environment", "-u", "-t", "="+name, paneEnvKey(sessionID)).Run()
 }
 
 func RespawnPane(paneID string, layout SessionLayout) error {
@@ -336,7 +336,7 @@ func RespawnPane(paneID string, layout SessionLayout) error {
 }
 
 func discoverOpenCodePane(session string) string {
-	cmd := exec.Command("tmux", "list-panes", "-t", session+":opencode", "-F", "#{pane_id}\t#{pane_current_command}")
+	cmd := exec.Command("tmux", "list-panes", "-t", "="+session+":opencode", "-F", "#{pane_id}\t#{pane_current_command}")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -382,6 +382,27 @@ func DisplayPopup(workingDir string, args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func KillSession(name string) error {
+	sanitised := SanitiseName(name)
+	cmd := exec.Command("tmux", "kill-session", "-t", "="+sanitised)
+	return cmd.Run()
+}
+
+func ListSessions() []string {
+	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	var sessions []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			sessions = append(sessions, line)
+		}
+	}
+	return sessions
 }
 
 func SwitchOrAttach(name string) error {

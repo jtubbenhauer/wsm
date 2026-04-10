@@ -26,15 +26,17 @@ cd wsm
 
 This builds the binary and copies it to `~/.local/bin/wsm`. Make sure `~/.local/bin` is in your `PATH`.
 
-### Recommended tmux keybinding
+### Recommended tmux keybindings
 
 Add to your `~/.tmux.conf`:
 
 ```tmux
-bind-key w run-shell "tmux popup -E -w 80% -h 80% wsm"
-```
+# prefix + s: Full session manager (all opencode sessions across workspaces)
+bind-key s run-shell "tmux popup -E -w 80% -h 80% wsm"
 
-This opens the picker in a centred tmux popup with `prefix + w`.
+# prefix + w: Quick workspace switcher (active tmux sessions only)
+bind-key w display-popup -E -w 60% -h 40% "wsm switch"
+```
 
 ## Quick Start
 
@@ -58,7 +60,8 @@ wsm
 | `wsm remove <name>` | Deregister a workspace (alias: `rm`) |
 | `wsm list` | List all registered workspaces (alias: `ls`, supports `--json`) |
 | `wsm info <name>` | Show workspace details and its opencode sessions |
-| `wsm worktree <parent> <branch>` | Create a git worktree and register it as a workspace |
+| `wsm workspace <parent> <branch>` | Create a git worktree and register it as a workspace |
+| `wsm switch` | Quick-switch between active workspace tmux sessions |
 | `wsm plan [--dir] [--name]` | Open plan files from `.opencode/plans/` in nvim |
 
 ## Picker Controls
@@ -68,6 +71,9 @@ wsm
 | `Enter` | Switch to the selected session |
 | `ctrl-n` | Create a new session (opens a workspace sub-picker) |
 | `ctrl-d` | Delete the selected session |
+| `ctrl-r` | Rename the selected session |
+| `ctrl-w` | Filter by workspace |
+| `ctrl-x` | Kill a tmux workspace session |
 | `ctrl-o` | Open plan files for the selected workspace in nvim |
 
 ### Status indicators
@@ -79,12 +85,12 @@ Sessions are sorted by most recently focused.
 
 ## Git Worktrees
 
-`wsm worktree` creates a git worktree from a registered parent workspace and registers it as a new workspace. Worktrees are placed in `<parent-dir>/<parent-name>-worktrees/<branch>/`.
+`wsm workspace` creates a git worktree from a registered parent workspace and registers it as a new workspace. Worktrees are placed in `<parent-dir>/<parent-name>-worktrees/<branch>/`.
 
-By default, symlinks are created for `node_modules`, `.env`, and `.env.local` from the parent workspace. Override with `--symlinks`:
+Symlinks from the parent workspace can be created with `--symlinks`:
 
 ```bash
-wsm worktree my-project feature-branch --symlinks node_modules,.env
+wsm workspace my-project feature-branch --symlinks node_modules,.env
 ```
 
 Use `--base` to specify the ref to branch from (defaults to `HEAD`).
