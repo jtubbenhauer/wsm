@@ -1,0 +1,33 @@
+internal/tmux/tmux.go
+  a4d7b9d0a8bc0da9 35,40,45,53,59,65,80,85,126,134,140,146,292,301,312,329,339,387-407
+install.sh
+  a4d7b9d0a8bc0da9 16-18
+internal/picker/picker.go
+  a4d7b9d0a8bc0da9 135,160,164,180,207-210,550-702
+cmd/root.go
+  a4d7b9d0a8bc0da9 114-140
+cmd/switch.go
+  a4d7b9d0a8bc0da9 1-88
+README.md
+  a4d7b9d0a8bc0da9 29,34-35,37-39,63-64,74-76,88,90,93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "f706fbaa2f78ecb6bcdc682eb8a6ba88077760cd",
+  "prompts": {
+    "a4d7b9d0a8bc0da9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_29055fdacffeAQd1wRH3Zyrwaq",
+        "model": "github-copilot/claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer",
+      "messages": [],
+      "total_additions": 388,
+      "total_deletions": 87,
+      "accepted_lines": 401,
+      "overriden_lines": 0
+    }
+  }
+}
