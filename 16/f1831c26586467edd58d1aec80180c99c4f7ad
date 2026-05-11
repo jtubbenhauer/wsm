@@ -1,0 +1,24 @@
+internal/tmux/tmux.go
+  eff3114eab983534 34-43,122,125,136,145,149-152,154,161,183,358-359,362,398-450
+cmd/root.go
+  eff3114eab983534 154,199-205
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "16f1831c26586467edd58d1aec80180c99c4f7ad",
+  "prompts": {
+    "eff3114eab983534": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_25c12187affe1VjKgIG2eoAads",
+        "model": "github-copilot/claude-opus-4.7"
+      },
+      "human_author": "Jack Tubbenhauer <jack@tubbs.dev>",
+      "total_additions": 118,
+      "total_deletions": 78,
+      "accepted_lines": 85,
+      "overriden_lines": 0
+    }
+  }
+}
