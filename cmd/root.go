@@ -151,7 +151,7 @@ func runPicker() error {
 		}
 
 		if result.RenameRequest {
-			newLabel, err := picker.RunRenamePrompt(result.Item.SessionTitle)
+			newLabel, err := tmux.PromptViaNvim("Rename session", result.Item.SessionTitle)
 			if err != nil {
 				return fmt.Errorf("running rename prompt: %w", err)
 			}
@@ -196,6 +196,13 @@ func runPicker() error {
 
 		sessionID := selected.SessionID
 		if selected.IsNew {
+			name, err := tmux.PromptViaNvim("Session name", "")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "name prompt: %v\n", err)
+				name = ""
+			}
+			selected.SessionTitle = name
+
 			session, err := client.CreateSession(selected.WorkspacePath)
 			if err != nil {
 				return fmt.Errorf("creating session: %w", err)

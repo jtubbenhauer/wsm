@@ -293,47 +293,6 @@ func FilterItemsByWorkspace(items []PickerItem, workspaceName string) []PickerIt
 	return filtered
 }
 
-func RunRenamePrompt(currentTitle string) (string, error) {
-	cmd := exec.Command("fzf",
-		"--ansi",
-		"--no-multi",
-		"--layout=reverse",
-		"--no-separator",
-		"--header=  Rename session (enter to confirm, esc to cancel)",
-		"--prompt=  ",
-		"--print-query",
-		"--query="+currentTitle,
-		"--info=hidden",
-		"--color=fg:#e6edf3,fg+:#f0f6fc:bold,bg:#0d1117,bg+:#161b22,hl:#3fb950,hl+:#3fb950:bold,info:#8b949e,prompt:#58a6ff,pointer:#58a6ff,header:#8b949e,gutter:#0d1117,border:#30363d",
-		"--preview-window=hidden",
-	)
-	cmd.Stdin = strings.NewReader("")
-	cmd.Stderr = os.Stderr
-
-	out, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			code := exitErr.ExitCode()
-			// fzf exits 1 when no match (expected with empty input + print-query)
-			if code == 1 {
-				query := strings.SplitN(strings.TrimRight(string(out), "\n"), "\n", 2)[0]
-				query = strings.TrimSpace(query)
-				if query == "" {
-					return "", nil
-				}
-				return query, nil
-			}
-			if code == 130 {
-				return "", nil
-			}
-		}
-		return "", fmt.Errorf("running rename prompt: %w", err)
-	}
-
-	query := strings.SplitN(strings.TrimRight(string(out), "\n"), "\n", 2)[0]
-	return strings.TrimSpace(query), nil
-}
-
 func RunWorkspacePicker(workspaces []db.Workspace, includeAll bool) (*db.Workspace, error) {
 	width := getTerminalWidth()
 

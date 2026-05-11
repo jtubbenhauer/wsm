@@ -105,7 +105,12 @@ func (db *DB) migrate() error {
 	return nil
 }
 
-func (db *DB) AddWorkspace(name, path string, wsType WorkspaceType, parentPath, branch string, symlinks []string) (*Workspace, error) {
+func (db *DB) AddWorkspace(
+	name, path string,
+	wsType WorkspaceType,
+	parentPath, branch string,
+	symlinks []string,
+) (*Workspace, error) {
 	if symlinks == nil {
 		symlinks = []string{}
 	}
@@ -116,7 +121,12 @@ func (db *DB) AddWorkspace(name, path string, wsType WorkspaceType, parentPath, 
 
 	result, err := db.conn.Exec(
 		`INSERT INTO workspaces (name, path, type, parent_path, branch, symlinks) VALUES (?, ?, ?, ?, ?, ?)`,
-		name, path, string(wsType), nullString(parentPath), nullString(branch), string(symlinksJSON),
+		name,
+		path,
+		string(wsType),
+		nullString(parentPath),
+		nullString(branch),
+		string(symlinksJSON),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("inserting workspace: %w", err)
@@ -217,13 +227,19 @@ func (db *DB) UpdateSessionLabel(workspaceID int64, sessionID, label string) err
 		return fmt.Errorf("checking rows affected: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("session activity not found for workspace %d, session %q", workspaceID, sessionID)
+		return fmt.Errorf(
+			"session activity not found for workspace %d, session %q",
+			workspaceID,
+			sessionID,
+		)
 	}
 	return nil
 }
 
 func (db *DB) GetSessionLabels() (map[string]string, error) {
-	rows, err := db.conn.Query(`SELECT session_id, label FROM session_activity WHERE label IS NOT NULL AND label != ''`)
+	rows, err := db.conn.Query(
+		`SELECT session_id, label FROM session_activity WHERE label IS NOT NULL AND label != ''`,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("querying session labels: %w", err)
 	}
@@ -265,7 +281,7 @@ func (db *DB) GetSessionActivities(workspaceID int64) ([]SessionActivity, error)
 }
 
 type scanner interface {
-	Scan(dest ...interface{}) error
+	Scan(dest ...any) error
 }
 
 func scanWorkspace(row scanner) (*Workspace, error) {
@@ -273,7 +289,16 @@ func scanWorkspace(row scanner) (*Workspace, error) {
 	var parentPath, branch sql.NullString
 	var symlinksJSON string
 
-	if err := row.Scan(&ws.ID, &ws.Name, &ws.Path, &ws.Type, &parentPath, &branch, &symlinksJSON, &ws.CreatedAt); err != nil {
+	if err := row.Scan(
+		&ws.ID,
+		&ws.Name,
+		&ws.Path,
+		&ws.Type,
+		&parentPath,
+		&branch,
+		&symlinksJSON,
+		&ws.CreatedAt,
+	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}

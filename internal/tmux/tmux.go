@@ -31,6 +31,16 @@ func logDebug(format string, args ...interface{}) {
 	fmt.Fprintf(f, "[%s] %s\n", ts, fmt.Sprintf(format, args...))
 }
 
+// paneListFor returns a debug-friendly summary of panes in a window.
+func paneListFor(sessionName string, windowIndex int) string {
+	target := fmt.Sprintf("=%s:%d", sessionName, windowIndex)
+	out, err := exec.Command("tmux", "list-panes", "-t", target, "-F", "#{pane_index}:#{pane_id}:#{pane_current_command}").Output()
+	if err != nil {
+		return fmt.Sprintf("<err: %v>", err)
+	}
+	return strings.ReplaceAll(strings.TrimSpace(string(out)), "\n", " | ")
+}
+
 func HasSession(name string) bool {
 	cmd := exec.Command("tmux", "has-session", "-t", "="+name)
 	return cmd.Run() == nil
@@ -109,8 +119,10 @@ type SessionLayout struct {
 //	Window 3: lazygit
 func CreateWorkspaceSession(layout SessionLayout) error {
 	name := SanitiseName(layout.Name)
+	logDebug("CreateWorkspaceSession: name=%s sessionID=%s path=%s", name, layout.SessionID, layout.WorkspacePath)
 
 	if HasSession(name) {
+		logDebug("  session exists, switching")
 		return switchToOpenCodeSession(name, layout)
 	}
 
@@ -121,6 +133,7 @@ func CreateWorkspaceSession(layout SessionLayout) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("creating tmux session: %w", err)
 	}
+	logDebug("  created session+window1 (nvim)")
 
 	// Window 2: opencode attach via wsm attach (capture pane ID for parking)
 	createOC := exec.Command("tmux", "new-window", "-t", "="+name, "-n", "opencode", "-c", layout.WorkspacePath, "-P", "-F", "#{pane_id}", "sh", "-c", attachCmd)
@@ -129,18 +142,23 @@ func CreateWorkspaceSession(layout SessionLayout) error {
 		return fmt.Errorf("creating opencode window: %w", err)
 	}
 	ocPaneID := strings.TrimSpace(string(ocPaneOut))
+	logDebug("  created window2 (opencode) pane=%s", ocPaneID)
 
 	// Split right for shell
 	splitCmd := exec.Command("tmux", "split-window", "-h", "-t", fmt.Sprintf("=%s:2", name), "-c", layout.WorkspacePath)
-	if err := splitCmd.Run(); err != nil {
-		return fmt.Errorf("splitting opencode window: %w", err)
+	splitOut, err := splitCmd.CombinedOutput()
+	if err != nil {
+		logDebug("  split-window FAILED: err=%v out=%q", err, string(splitOut))
+		return fmt.Errorf("splitting opencode window: %w (%s)", err, string(splitOut))
 	}
+	logDebug("  split-window ok, panes in window2: %s", paneListFor(name, 2))
 
 	// Select the left pane (opencode)
 	selectPane := exec.Command("tmux", "select-pane", "-t", fmt.Sprintf("=%s:2.1", name))
 	if err := selectPane.Run(); err != nil {
 		return fmt.Errorf("selecting opencode pane: %w", err)
 	}
+	logDebug("  selected pane 2.1, panes in window2: %s", paneListFor(name, 2))
 
 	// Window 3: lazygit (direct execution)
 	createLazygit := exec.Command("tmux", "new-window", "-t", "="+name, "-n", "lazygit", "-c", layout.WorkspacePath, "lazygit")
@@ -162,6 +180,7 @@ func CreateWorkspaceSession(layout SessionLayout) error {
 	if err := SelectWindow(name, 2); err != nil {
 		return fmt.Errorf("selecting opencode window: %w", err)
 	}
+	logDebug("  final state, panes in window2: %s", paneListFor(name, 2))
 
 	return nil
 }
@@ -336,9 +355,11 @@ func RespawnPane(paneID string, layout SessionLayout) error {
 }
 
 func discoverOpenCodePane(session string) string {
-	cmd := exec.Command("tmux", "list-panes", "-t", "="+session+":opencode", "-F", "#{pane_id}\t#{pane_current_command}")
+	target := "=" + session + ":opencode"
+	cmd := exec.Command("tmux", "list-panes", "-t", target, "-F", "#{pane_id}\t#{pane_current_command}")
 	out, err := cmd.Output()
 	if err != nil {
+		logDebug("  discoverOpenCodePane: list-panes failed target=%s err=%v", target, err)
 		return ""
 	}
 	// Pick the first pane whose command is NOT a plain shell
@@ -372,6 +393,59 @@ func RunInTerminal(args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// PromptViaNvim opens an nvim buffer for the user to type or edit a single-line
+// value and returns the trimmed contents. The buffer opens in normal mode with
+// the cursor on line 1; prefillValue (if non-empty) is placed on line 1 for
+// editing. Lines beginning with '#' are treated as instructional comments and
+// stripped. Empty result is valid (cancel/skip).
+func PromptViaNvim(prompt, prefillValue string) (string, error) {
+	logDebug("PromptViaNvim: start prompt=%q prefill=%q", prompt, prefillValue)
+	tmpFile, err := os.CreateTemp("", "wsm-prompt-*.txt")
+	if err != nil {
+		return "", fmt.Errorf("creating temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	prefill := fmt.Sprintf("%s\n# %s (edit above, :wq to confirm, empty = cancel)\n", prefillValue, prompt)
+	if _, err := tmpFile.WriteString(prefill); err != nil {
+		tmpFile.Close()
+		return "", fmt.Errorf("writing prefill: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return "", fmt.Errorf("closing temp file: %w", err)
+	}
+
+	nvimArgs := []string{
+		"nvim",
+		"-c", "set filetype=conf",
+		"-c", "set nonumber norelativenumber",
+		tmpPath,
+	}
+
+	if err := RunInTerminal(nvimArgs...); err != nil {
+		return "", fmt.Errorf("running nvim: %w", err)
+	}
+	logDebug("PromptViaNvim: nvim exited")
+
+	contents, err := os.ReadFile(tmpPath)
+	if err != nil {
+		return "", fmt.Errorf("reading prompt file: %w", err)
+	}
+
+	var meaningful []string
+	for _, line := range strings.Split(string(contents), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		meaningful = append(meaningful, trimmed)
+	}
+	result := strings.TrimSpace(strings.Join(meaningful, " "))
+	logDebug("PromptViaNvim: result=%q", result)
+	return result, nil
 }
 
 func DisplayPopup(workingDir string, args ...string) error {
