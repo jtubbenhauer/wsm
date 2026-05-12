@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/jacksteamdev/wsm/internal/db"
+	"github.com/jacksteamdev/wsm/internal/git"
 	"github.com/jacksteamdev/wsm/internal/opencode"
 	"github.com/jacksteamdev/wsm/internal/picker"
 	"github.com/jacksteamdev/wsm/internal/plans"
@@ -69,7 +70,11 @@ func runPicker() error {
 			if labels == nil {
 				labels = make(map[string]string)
 			}
-			items = picker.BuildPickerItems(workspaces, sessionsByDir, statuses, labels)
+			branches, _ := store.GetSessionBranches()
+			if branches == nil {
+				branches = make(map[string]string)
+			}
+			items = picker.BuildPickerItems(workspaces, sessionsByDir, statuses, labels, branches)
 		}
 
 		activeFilter := ""
@@ -185,9 +190,48 @@ func runPicker() error {
 			if ws == nil {
 				return nil
 			}
+
+			// Get current branch as default for the prompt
+			currentBranch, _ := git.CurrentBranch(ws.Path)
+			if currentBranch == "" {
+				currentBranch = "main"
+			}
+
+			branch, err := tmux.PromptViaNvim("Branch name (Enter = current)", currentBranch)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "branch prompt: %v\n", err)
+				continue
+			}
+			if branch == "" {
+				continue // user cancelled
+			}
+
+			// Safe checkout the branch (stash if dirty)
+			if ws.Type != db.WorkspaceTypeWorktree {
+				stashed, err := git.SafeCheckout(ws.Path, branch)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "checkout failed: %v\n", err)
+					if stashed {
+						fmt.Fprintln(os.Stderr, "Note: working tree was stashed before checkout; check for conflicts")
+					}
+					continue
+				}
+			}
+
+			name, err := tmux.PromptViaNvim("Session name", "")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "name prompt: %v\n", err)
+				continue
+			}
+			if name == "" {
+				continue // user cancelled
+			}
+
 			selected = &picker.PickerItem{
 				WorkspaceName: ws.Name,
 				WorkspacePath: ws.Path,
+				SessionTitle:  name,
+				Branch:        branch,
 				IsNew:         true,
 			}
 		} else {
@@ -196,13 +240,6 @@ func runPicker() error {
 
 		sessionID := selected.SessionID
 		if selected.IsNew {
-			name, err := tmux.PromptViaNvim("Session name", "")
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "name prompt: %v\n", err)
-				name = ""
-			}
-			selected.SessionTitle = name
-
 			session, err := client.CreateSession(selected.WorkspacePath)
 			if err != nil {
 				return fmt.Errorf("creating session: %w", err)
@@ -211,10 +248,22 @@ func runPicker() error {
 			fmt.Printf("Created new session for %s\n", selected.WorkspaceName)
 		}
 
-		// Track activity
+		// Track activity with branch
 		ws, err := store.GetWorkspace(selected.WorkspaceName)
 		if err == nil && ws != nil {
-			store.UpsertSessionActivity(ws.ID, sessionID, selected.SessionTitle)
+			store.UpsertSessionActivityWithBranch(ws.ID, sessionID, selected.SessionTitle, selected.Branch)
+		}
+
+		// For existing sessions on repo workspaces, checkout the associated branch
+		if !selected.IsNew && ws != nil && ws.Type != db.WorkspaceTypeWorktree && selected.Branch != "" {
+			stashed, err := git.SafeCheckout(ws.Path, selected.Branch)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "checkout failed: %v\n", err)
+				if stashed {
+					fmt.Fprintln(os.Stderr, "Note: working tree was stashed before checkout; check for conflicts")
+				}
+				// Don't abort — still try to attach to the session
+			}
 		}
 
 		layout := tmux.SessionLayout{

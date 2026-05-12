@@ -34,6 +34,7 @@ type SessionActivity struct {
 	SessionID   string    `json:"sessionId"`
 	LastFocused time.Time `json:"lastFocused"`
 	Label       string    `json:"label,omitempty"`
+	Branch      string    `json:"branch,omitempty"`
 }
 
 type DB struct {
@@ -94,6 +95,7 @@ func (db *DB) migrate() error {
 			session_id   TEXT NOT NULL,
 			last_focused DATETIME NOT NULL,
 			label        TEXT,
+			branch       TEXT,
 			PRIMARY KEY (workspace_id, session_id)
 		)`,
 	}
@@ -102,7 +104,40 @@ func (db *DB) migrate() error {
 			return fmt.Errorf("executing migration: %w", err)
 		}
 	}
+
+	// One-time migration: add branch column to existing session_activity tables
+	if err := db.ensureColumn("session_activity", "branch", "TEXT"); err != nil {
+		return fmt.Errorf("adding branch column: %w", err)
+	}
+
 	return nil
+}
+
+func (db *DB) ensureColumn(table, column, colType string) error {
+	rows, err := db.conn.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull, pk int
+		var dfltValue sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dfltValue, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return nil // already exists
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	_, err = db.conn.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, colType))
+	return err
 }
 
 func (db *DB) AddWorkspace(
@@ -214,6 +249,20 @@ func (db *DB) UpsertSessionActivity(workspaceID int64, sessionID string, label s
 	return nil
 }
 
+func (db *DB) UpsertSessionActivityWithBranch(workspaceID int64, sessionID, label, branch string) error {
+	_, err := db.conn.Exec(
+		`INSERT INTO session_activity (workspace_id, session_id, last_focused, label, branch)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(workspace_id, session_id)
+		 DO UPDATE SET last_focused = excluded.last_focused, label = excluded.label, branch = excluded.branch`,
+		workspaceID, sessionID, time.Now().UTC(), nullString(label), nullString(branch),
+	)
+	if err != nil {
+		return fmt.Errorf("upserting session activity: %w", err)
+	}
+	return nil
+}
+
 func (db *DB) UpdateSessionLabel(workspaceID int64, sessionID, label string) error {
 	result, err := db.conn.Exec(
 		`UPDATE session_activity SET label = ? WHERE workspace_id = ? AND session_id = ?`,
@@ -258,7 +307,7 @@ func (db *DB) GetSessionLabels() (map[string]string, error) {
 
 func (db *DB) GetSessionActivities(workspaceID int64) ([]SessionActivity, error) {
 	rows, err := db.conn.Query(
-		`SELECT workspace_id, session_id, last_focused, label
+		`SELECT workspace_id, session_id, last_focused, label, branch
 		 FROM session_activity WHERE workspace_id = ? ORDER BY last_focused DESC`,
 		workspaceID,
 	)
@@ -270,14 +319,35 @@ func (db *DB) GetSessionActivities(workspaceID int64) ([]SessionActivity, error)
 	var activities []SessionActivity
 	for rows.Next() {
 		var sa SessionActivity
-		var label sql.NullString
-		if err := rows.Scan(&sa.WorkspaceID, &sa.SessionID, &sa.LastFocused, &label); err != nil {
+		var label, branch sql.NullString
+		if err := rows.Scan(&sa.WorkspaceID, &sa.SessionID, &sa.LastFocused, &label, &branch); err != nil {
 			return nil, fmt.Errorf("scanning session activity: %w", err)
 		}
 		sa.Label = label.String
+		sa.Branch = branch.String
 		activities = append(activities, sa)
 	}
 	return activities, rows.Err()
+}
+
+func (db *DB) GetSessionBranches() (map[string]string, error) {
+	rows, err := db.conn.Query(
+		`SELECT session_id, branch FROM session_activity WHERE branch IS NOT NULL AND branch != ''`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying session branches: %w", err)
+	}
+	defer rows.Close()
+
+	branches := make(map[string]string)
+	for rows.Next() {
+		var sessionID, branch string
+		if err := rows.Scan(&sessionID, &branch); err != nil {
+			return nil, fmt.Errorf("scanning session branch: %w", err)
+		}
+		branches[sessionID] = branch
+	}
+	return branches, rows.Err()
 }
 
 type scanner interface {

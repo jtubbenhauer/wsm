@@ -51,6 +51,7 @@ type PickerItem struct {
 	UpdatedAt     time.Time
 	IsNew         bool
 	Status        string // "busy", "retry", or "" (idle)
+	Branch        string
 }
 
 func FormatPickerLine(item PickerItem, width int, maxWsWidth int) string {
@@ -66,14 +67,19 @@ func FormatPickerLine(item PickerItem, width int, maxWsWidth int) string {
 	wsName := shortName(item.WorkspaceName)
 	paddedWs := wsColour + wsName + strings.Repeat(" ", maxWsWidth-len(wsName)) + ansiReset
 
+	branchDisplay := ""
+	if item.Branch != "" {
+		branchDisplay = ansiDim + item.Branch + ansiReset + " | "
+	}
+
 	// 4(age) + 2(indicator) + 2(gap) + maxWsWidth + 2(gap)
-	maxTitle := width - maxWsWidth - 10
+	maxTitle := width - maxWsWidth - 10 - len(branchDisplay)
 	if maxTitle < 10 {
 		maxTitle = 10
 	}
 	title := truncate(item.SessionTitle, maxTitle)
 
-	return indicator + age + "  " + paddedWs + "  " + title
+	return indicator + age + "  " + paddedWs + "  " + branchDisplay + title
 }
 
 func ParsePickerLine(line string) (sessionID string, isNew bool) {
@@ -88,7 +94,7 @@ func ParsePickerLine(line string) (sessionID string, isNew bool) {
 	return meta, false
 }
 
-func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, statuses map[string]opencode.SessionStatus, labels map[string]string) []PickerItem {
+func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, statuses map[string]opencode.SessionStatus, labels map[string]string, branches map[string]string) []PickerItem {
 	var items []PickerItem
 
 	for _, ws := range workspaces {
@@ -101,6 +107,7 @@ func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, st
 			if label, ok := labels[s.ID]; ok {
 				title = label
 			}
+			branch := branches[s.ID]
 			items = append(items, PickerItem{
 				WorkspaceName: ws.Name,
 				WorkspacePath: ws.Path,
@@ -108,6 +115,7 @@ func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, st
 				SessionTitle:  title,
 				UpdatedAt:     s.UpdatedAt(),
 				Status:        status,
+				Branch:        branch,
 			})
 		}
 	}

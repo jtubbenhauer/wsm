@@ -44,6 +44,13 @@ var scanCmd = &cobra.Command{
 
 		var added, skipped int
 		for _, repo := range repos {
+			// Skip worktrees — we only register parent repos now.
+			// Existing worktree workspaces in the DB remain functional.
+			if repo.IsWorktree {
+				skipped++
+				continue
+			}
+
 			existing, err := store.GetWorkspaceByPath(repo.Path)
 			if err != nil {
 				return err
@@ -62,23 +69,14 @@ var scanCmd = &cobra.Command{
 				continue
 			}
 
-			wsType := db.WorkspaceTypeRepo
-			if repo.IsWorktree {
-				wsType = db.WorkspaceTypeWorktree
-			}
-
-			_, err = store.AddWorkspace(repo.Name, repo.Path, wsType, repo.ParentPath, repo.Branch, nil)
+			_, err = store.AddWorkspace(repo.Name, repo.Path, db.WorkspaceTypeRepo, repo.ParentPath, repo.Branch, nil)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "warning: skipping %s: %v\n", repo.Name, err)
 				skipped++
 				continue
 			}
 			added++
-			label := "repo"
-			if repo.IsWorktree {
-				label = "worktree"
-			}
-			fmt.Printf("  + %s (%s) [%s]\n", repo.Name, repo.Path, label)
+			fmt.Printf("  + %s (%s) [repo]\n", repo.Name, repo.Path)
 		}
 
 		// Remove workspaces whose paths no longer point to a valid git repo
