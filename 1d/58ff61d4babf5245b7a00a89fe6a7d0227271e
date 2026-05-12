@@ -1,0 +1,37 @@
+internal/db/db.go
+  s_0f05a1289485b9::t_a2398e4e687a12 98
+  s_0f05a1289485b9::t_874645d75a388f 252-265
+  s_0f05a1289485b9::t_7d738fd10887a7 37
+  s_0f05a1289485b9::t_0d3c07ad23163b 107-108,111-112
+  s_0f05a1289485b9::t_82270933f3db29 310,322-323,327,333-350
+  s_0f05a1289485b9::t_44efd83ca332cd 109-110,116-140
+internal/picker/picker.go
+  s_0f05a1289485b9::t_e61c94a990f4e7 97,110,118
+  s_0f05a1289485b9::t_451a209400a1ff 70-74,76,82
+  s_0f05a1289485b9::t_b2717f9f0f5ce0 54
+internal/git/git.go
+  s_0f05a1289485b9::t_166a9b5322c2ff 201-259
+cmd/root.go
+  s_0f05a1289485b9::t_076eef0b7e2f47 203,206,224-227
+  s_0f05a1289485b9::t_0567d1d8fa5649 73-77
+  s_0f05a1289485b9::t_08dc62ca0be585 9
+  s_0f05a1289485b9::t_8805c582478588 193-202,204-205,207-223,228-229,233-234,251,254-266
+cmd/scan.go
+  s_0f05a1289485b9::t_fd02b3ad8dde0e 47-53,72,79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "1d58ff61d4babf5245b7a00a89fe6a7d0227271e",
+  "prompts": {},
+  "sessions": {
+    "s_0f05a1289485b9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_1ebf64f43ffesabZd85xFtkBJa",
+        "model": "claude-opus-4.6"
+      },
+      "human_author": "Jack Tubbenhauer <jack@tubbs.dev>"
+    }
+  }
+}
