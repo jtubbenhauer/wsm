@@ -203,6 +203,12 @@ func RemoveWorktree(parentPath, wtPath string) error {
 // Returns true if a stash was created so the caller knows to expect potential
 // pop conflicts.
 func SafeCheckout(repoPath, branch string) (bool, error) {
+	// Skip checkout if already on the target branch
+	currentBranch, _ := CurrentBranch(repoPath)
+	if currentBranch == branch {
+		return false, nil
+	}
+
 	// Check if working tree is dirty
 	dirtyCmd := exec.Command("git", "-C", repoPath, "status", "--porcelain")
 	out, err := dirtyCmd.Output()
@@ -226,14 +232,6 @@ func SafeCheckout(repoPath, branch string) (bool, error) {
 	showRefCmd := exec.Command("git", "-C", repoPath, "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
 	if showRefCmd.Run() == nil {
 		branchExists = true
-	}
-
-	// Skip checkout if already on the target branch
-	if branchExists {
-		currentBranch, _ := CurrentBranch(repoPath)
-		if currentBranch == branch {
-			return stashed, nil
-		}
 	}
 
 	var checkoutArgs []string
