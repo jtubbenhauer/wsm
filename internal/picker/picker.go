@@ -12,7 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/jacksteamdev/wsm/internal/db"
-	"github.com/jacksteamdev/wsm/internal/opencode"
+	"github.com/jacksteamdev/wsm/internal/pi"
 	"github.com/jacksteamdev/wsm/internal/plans"
 )
 
@@ -22,7 +22,6 @@ const (
 	ansiDimBright = "\033[38;5;245m" // gray, lighter than dim
 	ansiGreen     = "\033[32m"
 	ansiYellow    = "\033[33m"
-	ansiRed       = "\033[31m"
 
 	AllWorkspacesName = "__all__"
 )
@@ -40,8 +39,8 @@ var workspaceColours = []string{
 	"\033[38;2;210;153;34m",  // gh yellow (#d29922)
 }
 
-// SessionsByDir is a map of directory path to top-level sessions for that directory
-type SessionsByDir = map[string][]opencode.Session
+// SessionsByDir is a map of directory path to sessions for that directory
+type SessionsByDir = map[string][]pi.Session
 
 type PickerItem struct {
 	WorkspaceName string
@@ -50,7 +49,6 @@ type PickerItem struct {
 	SessionTitle  string
 	UpdatedAt     time.Time
 	IsNew         bool
-	Status        string // "busy", "retry", or "" (idle)
 	Branch        string
 }
 
@@ -60,7 +58,6 @@ func FormatPickerLine(item PickerItem, width int, maxWsWidth int) string {
 		width = 40
 	}
 
-	indicator := statusIndicator(item.Status)
 	age := colouredAge(item.UpdatedAt)
 
 	wsColour := colourForWorkspace(item.WorkspaceName)
@@ -72,14 +69,14 @@ func FormatPickerLine(item PickerItem, width int, maxWsWidth int) string {
 		branchDisplay = ansiDim + item.Branch + ansiReset + " | "
 	}
 
-	// 4(age) + 2(indicator) + 2(gap) + maxWsWidth + 2(gap)
-	maxTitle := width - maxWsWidth - 10 - len(branchDisplay)
+	// 4(age) + 2(gap) + maxWsWidth + 2(gap)
+	maxTitle := width - maxWsWidth - 8 - len(branchDisplay)
 	if maxTitle < 10 {
 		maxTitle = 10
 	}
 	title := truncate(item.SessionTitle, maxTitle)
 
-	return indicator + age + "  " + paddedWs + "  " + branchDisplay + title
+	return "  " + age + "  " + paddedWs + "  " + branchDisplay + title
 }
 
 func ParsePickerLine(line string) (sessionID string, isNew bool) {
@@ -94,16 +91,12 @@ func ParsePickerLine(line string) (sessionID string, isNew bool) {
 	return meta, false
 }
 
-func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, statuses map[string]opencode.SessionStatus, labels map[string]string, branches map[string]string) []PickerItem {
+func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, labels map[string]string, branches map[string]string) []PickerItem {
 	var items []PickerItem
 
 	for _, ws := range workspaces {
 		for _, s := range sessionsByDir[ws.Path] {
-			status := ""
-			if st, ok := statuses[s.ID]; ok {
-				status = st.Type
-			}
-			title := s.Title
+			title := s.ID[:8]
 			if label, ok := labels[s.ID]; ok {
 				title = label
 			}
@@ -113,8 +106,7 @@ func BuildPickerItems(workspaces []db.Workspace, sessionsByDir SessionsByDir, st
 				WorkspacePath: ws.Path,
 				SessionID:     s.ID,
 				SessionTitle:  title,
-				UpdatedAt:     s.UpdatedAt(),
-				Status:        status,
+				UpdatedAt:     s.UpdatedAt,
 				Branch:        branch,
 			})
 		}
@@ -388,17 +380,6 @@ func colourForWorkspace(name string) string {
 	h := fnv.New32a()
 	h.Write([]byte(name))
 	return workspaceColours[int(h.Sum32())%len(workspaceColours)]
-}
-
-func statusIndicator(status string) string {
-	switch status {
-	case "busy":
-		return ansiYellow + "● " + ansiReset
-	case "retry":
-		return ansiRed + "↻ " + ansiReset
-	default:
-		return "  "
-	}
 }
 
 func colouredAge(t time.Time) string {

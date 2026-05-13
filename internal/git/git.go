@@ -228,6 +228,14 @@ func SafeCheckout(repoPath, branch string) (bool, error) {
 		branchExists = true
 	}
 
+	// Skip checkout if already on the target branch
+	if branchExists {
+		currentBranch, _ := CurrentBranch(repoPath)
+		if currentBranch == branch {
+			return stashed, nil
+		}
+	}
+
 	var checkoutArgs []string
 	if branchExists {
 		checkoutArgs = []string{"-C", repoPath, "checkout", branch}

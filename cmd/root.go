@@ -3,11 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"sync"
 
 	"github.com/jacksteamdev/wsm/internal/db"
 	"github.com/jacksteamdev/wsm/internal/git"
-	"github.com/jacksteamdev/wsm/internal/opencode"
+	"github.com/jacksteamdev/wsm/internal/pi"
 	"github.com/jacksteamdev/wsm/internal/picker"
 	"github.com/jacksteamdev/wsm/internal/plans"
 	"github.com/jacksteamdev/wsm/internal/tmux"
@@ -47,11 +46,6 @@ func runPicker() error {
 		return nil
 	}
 
-	client, err := opencode.EnsureServer(opencode.DefaultHost, opencode.DefaultPort)
-	if err != nil {
-		return fmt.Errorf("ensuring opencode server: %w", err)
-	}
-
 	dirs := make([]string, len(workspaces))
 	for i, ws := range workspaces {
 		dirs[i] = ws.Path
@@ -62,7 +56,7 @@ func runPicker() error {
 
 	for {
 		if items == nil {
-			sessionsByDir, statuses, err := fetchAll(client, dirs)
+			sessionsByDir, err := pi.FetchSessionsForDirs(dirs)
 			if err != nil {
 				return fmt.Errorf("fetching sessions: %w", err)
 			}
@@ -74,7 +68,7 @@ func runPicker() error {
 			if branches == nil {
 				branches = make(map[string]string)
 			}
-			items = picker.BuildPickerItems(workspaces, sessionsByDir, statuses, labels, branches)
+			items = picker.BuildPickerItems(workspaces, sessionsByDir, labels, branches)
 		}
 
 		activeFilter := ""
@@ -147,10 +141,9 @@ func runPicker() error {
 		items = nil
 
 		if result.DeleteRequest {
-			if err := client.DeleteSession(result.Item.SessionID); err != nil {
+			if err := pi.DeleteSession(result.Item.WorkspacePath, result.Item.SessionID); err != nil {
 				return fmt.Errorf("deleting session: %w", err)
 			}
-			tmux.CleanupParkedPane(result.Item.WorkspaceName, result.Item.SessionID)
 			fmt.Printf("Deleted session: %s\n", result.Item.SessionTitle)
 			continue
 		}
@@ -239,18 +232,22 @@ func runPicker() error {
 		}
 
 		sessionID := selected.SessionID
+		var sessionFilePath string
 		if selected.IsNew {
-			session, err := client.CreateSession(selected.WorkspacePath)
+			newSession, err := pi.CreateSession(selected.WorkspacePath)
 			if err != nil {
-				return fmt.Errorf("creating session: %w", err)
+				return fmt.Errorf("creating pi session: %w", err)
 			}
-			sessionID = session.ID
-			fmt.Printf("Created new session for %s\n", selected.WorkspaceName)
+			sessionID = newSession.ID
+			sessionFilePath = newSession.FilePath
+		} else if sessionID != "" {
+			if path, err := pi.FindSessionFile(selected.WorkspacePath, sessionID); err == nil {
+				sessionFilePath = path
+			}
 		}
 
-		// Track activity with branch
 		ws, err := store.GetWorkspace(selected.WorkspaceName)
-		if err == nil && ws != nil {
+		if err == nil && ws != nil && sessionID != "" {
 			store.UpsertSessionActivityWithBranch(ws.ID, sessionID, selected.SessionTitle, selected.Branch)
 		}
 
@@ -267,9 +264,10 @@ func runPicker() error {
 		}
 
 		layout := tmux.SessionLayout{
-			Name:          selected.WorkspaceName,
-			WorkspacePath: selected.WorkspacePath,
-			SessionID:     sessionID,
+			Name:            selected.WorkspaceName,
+			WorkspacePath:   selected.WorkspacePath,
+			SessionID:       sessionID,
+			SessionFilePath: sessionFilePath,
 		}
 
 		if err := tmux.CreateWorkspaceSession(layout); err != nil {
@@ -278,31 +276,6 @@ func runPicker() error {
 
 		return tmux.SwitchOrAttach(selected.WorkspaceName)
 	}
-}
-
-func fetchAll(client *opencode.Client, dirs []string) (picker.SessionsByDir, map[string]opencode.SessionStatus, error) {
-	var sessionsByDir picker.SessionsByDir
-	var statuses map[string]opencode.SessionStatus
-	var sessErr error
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		sessionsByDir, sessErr = client.FetchSessionsForDirs(dirs)
-	}()
-	go func() {
-		defer wg.Done()
-		statuses = client.FetchStatusesForDirs(dirs)
-	}()
-
-	wg.Wait()
-
-	if sessErr != nil {
-		return nil, nil, fmt.Errorf("fetching sessions: %w", sessErr)
-	}
-	return sessionsByDir, statuses, nil
 }
 
 func openPlanForWorkspace(workspacePath, workspaceName string) error {
