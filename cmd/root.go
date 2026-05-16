@@ -144,6 +144,7 @@ func runPicker() error {
 			if err := pi.DeleteSession(result.Item.WorkspacePath, result.Item.SessionID); err != nil {
 				return fmt.Errorf("deleting session: %w", err)
 			}
+			tmux.CleanupParkedPane(result.Item.WorkspaceName, result.Item.SessionID)
 			fmt.Printf("Deleted session: %s\n", result.Item.SessionTitle)
 			continue
 		}
@@ -190,7 +191,7 @@ func runPicker() error {
 				currentBranch = "main"
 			}
 
-			branch, err := tmux.PromptViaNvim("Branch name (Enter = current)", currentBranch)
+			branch, err := tmux.PromptViaNvim("Branch name (Enter = current, - = branchless)", currentBranch)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "branch prompt: %v\n", err)
 				continue
@@ -199,8 +200,14 @@ func runPicker() error {
 				continue // user cancelled
 			}
 
+			// Branchless mode: skip checkout entirely
+			branchless := branch == "-"
+			if branchless {
+				branch = ""
+			}
+
 			// Safe checkout the branch (stash if dirty)
-			if ws.Type != db.WorkspaceTypeWorktree {
+			if !branchless && ws.Type != db.WorkspaceTypeWorktree {
 				stashed, err := git.SafeCheckout(ws.Path, branch)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "checkout failed: %v\n", err)

@@ -66,7 +66,7 @@ func FormatPickerLine(item PickerItem, width int, maxWsWidth int) string {
 
 	branchDisplay := ""
 	if item.Branch != "" {
-		branchDisplay = ansiDim + item.Branch + ansiReset + " | "
+		branchDisplay = ansiDim + " | " + item.Branch + ansiReset
 	}
 
 	// 4(age) + 2(gap) + maxWsWidth + 2(gap)
@@ -76,7 +76,7 @@ func FormatPickerLine(item PickerItem, width int, maxWsWidth int) string {
 	}
 	title := truncate(item.SessionTitle, maxTitle)
 
-	return "  " + age + "  " + paddedWs + "  " + branchDisplay + title
+	return "  " + age + "  " + paddedWs + "  " + title + branchDisplay
 }
 
 func ParsePickerLine(line string) (sessionID string, isNew bool) {
