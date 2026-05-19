@@ -185,39 +185,6 @@ func runPicker() error {
 				return nil
 			}
 
-			// Get current branch as default for the prompt
-			currentBranch, _ := git.CurrentBranch(ws.Path)
-			if currentBranch == "" {
-				currentBranch = "main"
-			}
-
-			branch, err := tmux.PromptViaNvim("Branch name (Enter = current, - = branchless)", currentBranch)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "branch prompt: %v\n", err)
-				continue
-			}
-			if branch == "" {
-				continue // user cancelled
-			}
-
-			// Branchless mode: skip checkout entirely
-			branchless := branch == "-"
-			if branchless {
-				branch = ""
-			}
-
-			// Safe checkout the branch (stash if dirty)
-			if !branchless && ws.Type != db.WorkspaceTypeWorktree {
-				stashed, err := git.SafeCheckout(ws.Path, branch)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "checkout failed: %v\n", err)
-					if stashed {
-						fmt.Fprintln(os.Stderr, "Note: working tree was stashed before checkout; check for conflicts")
-					}
-					continue
-				}
-			}
-
 			name, err := tmux.PromptViaNvim("Session name", "")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "name prompt: %v\n", err)
@@ -227,11 +194,14 @@ func runPicker() error {
 				continue // user cancelled
 			}
 
+			// Capture current branch as display-only metadata
+			currentBranch, _ := git.CurrentBranch(ws.Path)
+
 			selected = &picker.PickerItem{
 				WorkspaceName: ws.Name,
 				WorkspacePath: ws.Path,
 				SessionTitle:  name,
-				Branch:        branch,
+				Branch:        currentBranch,
 				IsNew:         true,
 			}
 		} else {
@@ -256,18 +226,6 @@ func runPicker() error {
 		ws, err := store.GetWorkspace(selected.WorkspaceName)
 		if err == nil && ws != nil && sessionID != "" {
 			store.UpsertSessionActivityWithBranch(ws.ID, sessionID, selected.SessionTitle, selected.Branch)
-		}
-
-		// For existing sessions on repo workspaces, checkout the associated branch
-		if !selected.IsNew && ws != nil && ws.Type != db.WorkspaceTypeWorktree && selected.Branch != "" {
-			stashed, err := git.SafeCheckout(ws.Path, selected.Branch)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "checkout failed: %v\n", err)
-				if stashed {
-					fmt.Fprintln(os.Stderr, "Note: working tree was stashed before checkout; check for conflicts")
-				}
-				// Don't abort — still try to attach to the session
-			}
 		}
 
 		layout := tmux.SessionLayout{
